@@ -20,34 +20,20 @@
  *                                                                         *
  ***************************************************************************/
 
-#ifndef GUIABSTRACTNATIVEEVENT_H
-#define GUIABSTRACTNATIVEEVENT_H
+#include "GuiAbstractNativeEvent.h"
 
-#include <QObject>
-#include <vector>
+#include "GuiApplicationNativeEventAware.h"
 
-class QMainWindow;
+std::vector<int> Gui::GuiAbstractNativeEvent::motionDataArray(6,0);
+Gui::GUIApplicationNativeEventAware* Gui::GuiAbstractNativeEvent::mainApp;
 
-namespace Gui
+Gui::GuiAbstractNativeEvent::GuiAbstractNativeEvent(GUIApplicationNativeEventAware *app)
+ : QObject(app)
 {
-    class GUIApplicationNativeEventAware;
-
-    class GuiAbstractNativeEvent : public QObject
-    {
-    Q_OBJECT
-    public:
-        explicit GuiAbstractNativeEvent(GUIApplicationNativeEventAware *app);
-        ~GuiAbstractNativeEvent() override =0;
-        virtual void initSpaceball(QMainWindow *window)=0;
-    private:
-        GuiAbstractNativeEvent();
-        GuiAbstractNativeEvent(const GuiAbstractNativeEvent&);
-        GuiAbstractNativeEvent& operator=(const GuiAbstractNativeEvent&);
-    protected:
-        static GUIApplicationNativeEventAware *mainApp;
-        static std::vector<int>motionDataArray;
-    };
+  mainApp = app;	
 }
 
+Gui::GuiAbstractNativeEvent::~GuiAbstractNativeEvent()
+{}
 
-#endif //GUIABSTRACTNATIVEEVENT_H
+#include "3Dconnexion/moc_GuiAbstractNativeEvent.cpp"
