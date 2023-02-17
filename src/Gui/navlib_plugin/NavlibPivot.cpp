@@ -45,9 +45,9 @@ bool InitPivot(NavlibInterface::Pivot* pivot)
 			{
 				if (auto grp = dynamic_cast<SoGroup*>(viewer->getSceneGraph())) 
 				{
-					if (!pivot->IsInitialized())
+					if (!pivot->isInitialized())
 					{
-						pivot->Init(grp);
+						pivot->init(grp);
 					}
 					return true;
 				}
@@ -59,20 +59,20 @@ bool InitPivot(NavlibInterface::Pivot* pivot)
 
 long NavlibInterface::GetPointerPosition(navlib::point_t &position) const
 {
-	if (Is2DView())
+	if (is2DView())
 	{
-		QPoint viewPoint = currentView_._2D->mapFromGlobal(QCursor::pos());
-		auto const& data2d = data2d_.at(currentView_._2D);
-		QPointF size(data2d.modelExtents_.width(), (data2d.modelExtents_.height()));
-		auto sceneVP = (currentView_._2D->mapToScene(viewPoint) - size / 2.0) / data2d.scale_;
-		QVector4D pos = data2d.data_ * QVector4D(sceneVP.x(), -sceneVP.y(), 1, 1);
+	    QPoint viewPoint = currentView.pView2d->mapFromGlobal(QCursor::pos());
+		auto const& data2d = data2dMap.at(currentView.pView2d);
+		QPointF size(data2d.modelExtents.width(), (data2d.modelExtents.height()));
+		auto sceneVP = (currentView.pView2d->mapToScene(viewPoint) - size / 2.0) / data2d.scale;
+		QVector4D pos = data2d.data * QVector4D(sceneVP.x(), -sceneVP.y(), 1, 1);
 		position = { {pos.x(), pos.y(), 0} };
 		return 0;
 	}
-	if (auto viewer = GetViewer())
+	if (auto viewer = getViewer())
 	{
-		QPoint viewPoint =  currentView_._3D->mapFromGlobal(QCursor::pos());
-		viewPoint.setY(currentView_._3D->height() - viewPoint.y());
+		QPoint viewPoint =  currentView.pView3d->mapFromGlobal(QCursor::pos());
+		viewPoint.setY(currentView.pView3d->height() - viewPoint.y());
 		auto pos = viewer->getPointOnFocalPlane(SbVec2s(viewPoint.x(), viewPoint.y()));
 		std::copy(pos.getValue(), pos.getValue() + 3, position.coordinates);
 		return 0;
@@ -98,12 +98,12 @@ long NavlibInterface::SetSelectionTransform(const navlib::matrix_t &)
 
 long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
 {
-	if (Is3DView())
+	if (is3DView())
 	{
-		if (auto viewer = GetViewer()){
-			if (auto pivot = GetCurrentPivot()) 
+		if (auto viewer = getViewer()){
+			if (auto pivot = getCurrentPivot()) 
 			{
-				auto trans = pivot->transf_->translation.getValue();
+				auto trans = pivot->pTransform->translation.getValue();
 				std::copy(trans.getValue(), trans.getValue() + 3, position.coordinates);
 				return 0;
 			}
@@ -114,9 +114,9 @@ long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
 
 long NavlibInterface::SetPivotPosition(const navlib::point_t &position)
 {	
-	if(Is3DView()){	
-		if(auto pivot = GetCurrentPivot()){
-			pivot->transf_->translation.setValue(position.x, position.y, position.z);
+	if(is3DView()){	
+		if(auto pivot = getCurrentPivot()){
+			pivot->pTransform->translation.setValue(position.x, position.y, position.z);
 			return 0;
 		}
 	}
@@ -131,8 +131,8 @@ long NavlibInterface::IsUserPivot(navlib::bool_t &userPivot) const
 
 long NavlibInterface::GetPivotVisible(navlib::bool_t &visible) const
 {	
-	if(auto pivot = GetCurrentPivot()){
-			visible = pivot->visibility_->whichChild.getValue() == SO_SWITCH_ALL;
+	if(auto pivot = getCurrentPivot()){
+			visible = pivot->pVisibility->whichChild.getValue() == SO_SWITCH_ALL;
 			return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -140,7 +140,7 @@ long NavlibInterface::GetPivotVisible(navlib::bool_t &visible) const
 
 long NavlibInterface::SetPivotVisible(bool visible)
 {
-	auto pivot = GetCurrentPivot();
+	auto pivot = getCurrentPivot();
 	if (pivot == nullptr)
 	{
 		return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -148,23 +148,23 @@ long NavlibInterface::SetPivotVisible(bool visible)
 	
 	if (visible)
 	{
-		pivot->visibility_->whichChild = SO_SWITCH_ALL;
+		pivot->pVisibility->whichChild = SO_SWITCH_ALL;
 	}
 	else
 	{
-		pivot->visibility_->whichChild = SO_SWITCH_NONE;
+		pivot->pVisibility->whichChild = SO_SWITCH_NONE;
 	}
 	return 0;
 }
 
 long NavlibInterface::GetHitLookAt(navlib::point_t &position) const
 {
-	if (auto viewer = GetViewer())
+	if (auto viewer = getViewer())
 	{
 		if (auto graph = viewer->getSceneGraph())
 		{
 			SoRayPickAction rpaction(viewer->getSoRenderManager()->getViewportRegion());
-			rpaction.setRay(ray_.origin_, ray_.direction_);
+			rpaction.setRay(ray.origin, ray.direction);
 			rpaction.apply(graph);
 			SoPickedPoint *picked = rpaction.getPickedPoint();
 			if (picked != nullptr)
@@ -199,35 +199,35 @@ long NavlibInterface::GetSelectionExtents(navlib::box_t &extents) const
 
 long NavlibInterface::SetHitAperture(double aperture)
 {
-	ray_.radius_ = aperture;
+	ray.radius = aperture;
 	return 0;
 }
 
 long NavlibInterface::SetHitDirection(const navlib::vector_t &direction)
 {
-	ray_.direction_.setValue(direction.components);
+	ray.direction.setValue(direction.components);
 	return 0;
 }
 
 long NavlibInterface::SetHitLookFrom(const navlib::point_t &eye)
 {
-	ray_.origin_.setValue(eye.coordinates);
+	ray.origin.setValue(eye.coordinates);
 	return 0;
 }
 
 long NavlibInterface::SetHitSelectionOnly(bool hitSelection)
 {
-	ray_.selectionOnly_ = hitSelection;
+	ray.selectionOnly = hitSelection;
 	return 0;
 }
 
-NavlibInterface::Pivot* NavlibInterface::GetCurrentPivot() const
+NavlibInterface::Pivot* NavlibInterface::getCurrentPivot() const
 {
 	if (const Gui::Document* doc = Gui::Application::Instance->activeDocument())
 	{
-		if (doc2Pivot_.find(doc) != doc2Pivot_.end())
+		if (doc2Pivot.find(doc) != doc2Pivot.end())
 		{
-			auto pivot = doc2Pivot_.at(doc).get();
+			auto pivot = doc2Pivot.at(doc).get();
 			if (InitPivot(pivot))
 			{
 				return pivot;
@@ -238,42 +238,42 @@ NavlibInterface::Pivot* NavlibInterface::GetCurrentPivot() const
 }
 
 NavlibInterface::Pivot::Pivot()
-	: rpath_(":/icons/3dx_pivot.png")
-	, transf_(nullptr)
-	, visibility_(nullptr)
-	, resetView_(nullptr)
-	, img_(nullptr)
+	: imagePath(":/icons/3dx_pivot.png")
+	, pTransform(nullptr)
+	, pVisibility(nullptr)
+	, pResetView(nullptr)
+	, pImage(nullptr)
 { }
 
-void NavlibInterface::Pivot::Init(SoGroup* grp)
+void NavlibInterface::Pivot::init(SoGroup* grp)
 {
-	transf_ = new SoTransform;
-	visibility_ = new SoSwitch;
-	resetView_ = new SoResetTransform;
-	img_ = new SoImage;
+	pTransform = new SoTransform;
+	pVisibility = new SoSwitch;
+	pResetView = new SoResetTransform;
+	pImage = new SoImage;
 	SoDepthBuffer * deptb = new SoDepthBuffer;
 	deptb->function.setValue(SoDepthBufferElement::ALWAYS);
-	UpdatePivotResolution();
-	conn_=qApp->focusWindow()->connect(qApp->focusWindow(), &QWindow::screenChanged, [this](QScreen*s){UpdatePivotResolution();});
-	visibility_->whichChild = SO_SWITCH_NONE;
-	grp->addChild(visibility_);
-	visibility_->addChild(deptb);
-	visibility_->addChild(resetView_);
-	visibility_->addChild(transf_);
-	visibility_->addChild(img_);
+	updatePivotResolution();
+	connection=qApp->focusWindow()->connect(qApp->focusWindow(), &QWindow::screenChanged, [this](QScreen*s){updatePivotResolution();});
+	pVisibility->whichChild = SO_SWITCH_NONE;
+	grp->addChild(pVisibility);
+	pVisibility->addChild(deptb);
+	pVisibility->addChild(pResetView);
+	pVisibility->addChild(pTransform);
+	pVisibility->addChild(pImage);
 }
 
-bool NavlibInterface::Pivot::IsInitialized()
+bool NavlibInterface::Pivot::isInitialized()
 {
-	return transf_ != nullptr && visibility_ != nullptr && resetView_ != nullptr && img_ != nullptr;
+	return pTransform != nullptr && pVisibility != nullptr && pResetView != nullptr && pImage != nullptr;
 }
 
-void NavlibInterface::Pivot::UpdatePivotResolution(){
-	QImage qimage(QString::fromStdString(rpath_));
+void NavlibInterface::Pivot::updatePivotResolution(){
+	QImage qimage(QString::fromStdString(imagePath));
 	qimage= qimage.scaled(qimage.size()*qApp->focusWindow()->devicePixelRatio());
-	Gui::BitmapFactory().convert(qimage, img_->image); 
+	Gui::BitmapFactory().convert(qimage, pImage->image); 
 }
 
 NavlibInterface::Pivot::~Pivot(){
-  qApp->focusWindow()->disconnect(conn_);
+  qApp->focusWindow()->disconnect(connection);
 }
