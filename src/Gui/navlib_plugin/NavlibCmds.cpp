@@ -119,10 +119,15 @@ void NavlibInterface::extractCommand(Gui::Command& cmd, TDx::SpaceMouse::CCatego
 	}
 		
 	auto cmdId = cmd.getName();
+
 	if(commands.find(cmdId)== commands.end()){
 		commands[cmdId]=std::make_shared<FreecadCmd>(cmd.getAction()->action(), &cmd);
 	}
 	auto localCmd=commands[cmdId];
+
+	if (localCmd->extractCmd().Label == "")
+        return;
+
 	cat.push_back(localCmd->extractCmd());
 	if(!cmd.getAction()->icon().isNull()){
 		images.push_back(localCmd->extractImage());
@@ -137,6 +142,10 @@ void NavlibInterface::extractCommands(Gui::ActionGroup& actions, Gui::Command& c
 		}
 		auto cmdId= std::string(cmd.getName())+"_"+action->text().toStdString();
 		auto  localCmd = commands[cmdId]=std::make_shared<FreecadCmd>(action, &cmd, actionIdx++);
+
+		if (localCmd->extractCmd().Label == "")
+            return;
+
 		cat.push_back(localCmd->extractCmd());
 		if(!action->icon().isNull()){
 			images.push_back(localCmd->extractImage());
@@ -170,6 +179,9 @@ void NavlibInterface::ExportCommands(){
 		workbenchcmds.insert(workbenchcmds.end(), extApp.begin(), extApp.end());
 		for (auto &cmd : workbenchcmds)
 		{
+            if (!(strcmp(cmd->getGroupName(), "<string>") && strcmp(cmd->getGroupName(), "")))
+                cmd->setGroupName("Others");
+			
 			CCategory cCat(cmd->getGroupName(), cmd->getGroupName());
 			extractCommand(*cmd, cCat, images);
 			cSet.push_back(std::move(cCat));
