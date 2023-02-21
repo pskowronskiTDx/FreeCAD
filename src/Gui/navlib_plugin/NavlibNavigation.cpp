@@ -117,7 +117,7 @@ NavlibInterface::NavlibInterface()
 
 void NavlibInterface::EnableNavigation()
 {
-	PutProfileHint("Freecad");
+	PutProfileHint("FreeCAD");
 	nav3d::EnableNavigation(true);
 	PutFrameTimingSource(TimingSource::SpaceMouse);
 	Write(navlib::active_k, true);
@@ -182,36 +182,35 @@ long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
 
 		cam->orientation = SbRotation(cameraMatrix);
 		cam->position.setValue(matrix.m4x4[3][0], matrix.m4x4[3][1], matrix.m4x4[3][2]);
-
+		
 		auto viewer = getViewer();
         SoGetBoundingBoxAction action(viewer->getSoRenderManager()->getViewportRegion());
         action.apply(viewer->getSceneGraph());
         SbBox3f nbbox = action.getBoundingBox();
-
         SbVec3f modelCenter = nbbox.getCenter();
         float modelRadius = (nbbox.getMin() - modelCenter).length();
 
-		if (auto cam = getCamera<SoOrthographicCamera*>()) {
+		navlib::bool_t isPerspective;
+        GetIsViewPerspective(isPerspective);
+
+		if (!isPerspective) {
 
             cameraMatrix.inverse().multVecMatrix(modelCenter, modelCenter);
 
             float nearDist = -(modelRadius + modelCenter.getValue()[2]);
-            float farDist = nearDist + 2.0 * modelRadius;
+            float farDist = nearDist + 2.0f * modelRadius;
 
-            if (nearDist < 0.0) {
+            if (nearDist < 0.0f) {
                 cam->nearDistance.setValue(nearDist);
                 cam->farDistance.setValue(-nearDist);
             }
             else {
                 cam->nearDistance.setValue(-farDist);
                 cam->farDistance.setValue(farDist);
-            }
+            }           
         }
-        else if (auto cam = getCamera<SoPerspectiveCamera*>()) {
-            cam->nearDistance.setValue(0.01);
-            cam->farDistance.setValue(2.0 * modelRadius);
-		}
-		return 0;
+        cam->touch();
+        return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
@@ -219,12 +218,22 @@ long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
 long NavlibInterface::GetViewFrustum(navlib::frustum_t &frustum) const
 {
 	if (auto cam = getCamera<SoPerspectiveCamera *>()){
-		auto vv = cam->getViewVolume(cam->aspectRatio.getValue());
-		
-		frustum = {-vv.getWidth()/2.0, vv.getWidth()/2.0, -vv.getHeight()/2.0, vv.getHeight()/2.0, vv.getNearDist(), 10.0 * (vv.getNearDist()+ vv.nearToFar) };
+
+		auto viewVolume = cam->getViewVolume(cam->aspectRatio.getValue());
+        float halfHeight = viewVolume.getHeight() / 2.0f;
+        float halfWidth = viewVolume.getWidth() / 2.0f;
+
+
+		frustum = {-halfWidth,
+                   halfWidth,
+                   -halfHeight,
+                   halfHeight,
+                   viewVolume.getNearDist(),
+                   10.0f * (viewVolume.getNearDist() + viewVolume.nearToFar)};
+
 		if (auto cam = getCamera())
 		{
-			cam->focalDistance.setValue((2.0 * vv.getNearDist() + vv.nearToFar) / 2.0);
+            cam->focalDistance.setValue((2.0 * viewVolume.getNearDist() + viewVolume.nearToFar) / 2.0);
 			cam->touch();
 		}
 		return 0;
@@ -243,10 +252,10 @@ long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
 	if (auto cam = getCamera<SoOrthographicCamera*>())
 	{
 		auto vVol = cam->getViewVolume(cam->aspectRatio.getValue());
-		float half_height = vVol.getHeight() / 2.0f;
-        float half_width = vVol.getWidth() / 2.0f;
-		auto farVal = vVol.nearToFar + vVol.nearDist;
-		extents = { -half_width, -half_height , -farVal, half_width, half_height, farVal };
+		float halfHeight = vVol.getHeight() / 2.0f;
+        float halfWidth = vVol.getWidth() / 2.0f;
+		auto farDist = vVol.nearToFar + vVol.nearDist;
+		extents = { -halfWidth, -halfHeight , -farDist, halfWidth, halfHeight, farDist };
         return 0;
     }
 	else if (is2DView())
@@ -283,9 +292,7 @@ long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
 		GetViewExtents(e);
         if (auto cam = getCamera<SoOrthographicCamera*>())
 		{
-            float scaling = (extents.max_x - extents.min_x) / (e.max_x - e.min_x);
-			cam->scaleHeight(scaling);   
-			
+            cam->scaleHeight((extents.max_x - extents.min_x) / (e.max_x - e.min_x));   		
 			return 0;
 		}
 	}
