@@ -66,7 +66,7 @@ long NavlibInterface::GetPointerPosition(navlib::point_t &position) const
 		QPointF size(data2d.modelExtents.width(), (data2d.modelExtents.height()));
 		auto sceneVP = (currentView.pView2d->mapToScene(viewPoint) - size / 2.0) / data2d.scale;
 		QVector4D pos = data2d.data * QVector4D(sceneVP.x(), -sceneVP.y(), 1, 1);
-		position = { {pos.x(), pos.y(), 0} };
+		position = { pos.x(), pos.y(), 0 };
 		return 0;
 	}
 	if (auto viewer = getViewer())
@@ -74,7 +74,7 @@ long NavlibInterface::GetPointerPosition(navlib::point_t &position) const
 		QPoint viewPoint =  currentView.pView3d->mapFromGlobal(QCursor::pos());
 		viewPoint.setY(currentView.pView3d->height() - viewPoint.y());
 		auto pos = viewer->getPointOnFocalPlane(SbVec2s(viewPoint.x(), viewPoint.y()));
-		std::copy(pos.getValue(), pos.getValue() + 3, position.coordinates);
+		std::copy(pos.getValue(), pos.getValue() + 3, &position.x);
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -104,7 +104,7 @@ long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
 			if (auto pivot = getCurrentPivot()) 
 			{
 				auto trans = pivot->pTransform->translation.getValue();
-				std::copy(trans.getValue(), trans.getValue() + 3, position.coordinates);
+				std::copy(trans.getValue(), trans.getValue() + 3, &position.x);
 				return 0;
 			}
 		}
@@ -170,7 +170,7 @@ long NavlibInterface::GetHitLookAt(navlib::point_t &position) const
 			if (picked != nullptr)
 			{
 				auto hitpoint = picked->getPoint();
-				std::copy(hitpoint.getValue(), hitpoint.getValue() + 3, position.coordinates);
+				std::copy(hitpoint.getValue(), hitpoint.getValue() + 3, &position.x);
 				return 0;
 			}
 		}
@@ -205,13 +205,13 @@ long NavlibInterface::SetHitAperture(double aperture)
 
 long NavlibInterface::SetHitDirection(const navlib::vector_t &direction)
 {
-	ray.direction.setValue(direction.components);
+	ray.direction.setValue(direction.x, direction.y, direction.z);
 	return 0;
 }
 
 long NavlibInterface::SetHitLookFrom(const navlib::point_t &eye)
 {
-	ray.origin.setValue(eye.coordinates);
+	ray.origin.setValue(eye.x, eye.y, eye.z);
 	return 0;
 }
 

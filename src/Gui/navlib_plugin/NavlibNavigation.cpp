@@ -154,16 +154,16 @@ long NavlibInterface::GetCameraMatrix(navlib::matrix_t& matrix) const
 			SbMatrix mat;
 			cam->orientation.getValue().getValue(mat);
 			for (int i = 0; i < 4; i++) {
-				std::copy(mat[i], mat[i] + 4, matrix.m4x4[i]);
+				std::copy(mat[i], mat[i] + 4, &matrix.m00 + 4*i);
 			}
 			const auto& position = cam->position;
-            std::copy(position.getValue().getValue(), position.getValue().getValue() + 3, matrix.m4x4[3]);
+            std::copy(position.getValue().getValue(), position.getValue().getValue() + 3, &matrix.m30);
 			return 0;
 		}
 	}
 	else if (is2DView())
 	{
-		std::copy(data2dMap.at(currentView.pView2d).data.data(), data2dMap.at(currentView.pView2d).data.data() + 16, matrix.m);
+		std::copy(data2dMap.at(currentView.pView2d).data.data(), data2dMap.at(currentView.pView2d).data.data() + 16, &matrix.m00);
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::function_not_supported);
@@ -173,15 +173,19 @@ long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
 {
 	if (is2DView())
 	{
-		std::copy(matrix.m,matrix.m+16, data2dMap.at(currentView.pView2d).data.data());
+		std::copy(&matrix.m00, &matrix.m33, data2dMap.at(currentView.pView2d).data.data());
 		return 0;
 	}
-	else if (auto cam = getCamera())
-	{
-        SbMatrix cameraMatrix(matrix.m4x4);
+	else if (auto cam = getCamera()) {
+        
+        SbMatrix cameraMatrix(
+			matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(0, 3),
+            matrix(1, 0), matrix(1, 1), matrix(1, 2), matrix(1, 3),
+            matrix(2, 0), matrix(2, 1), matrix(2, 2), matrix(2, 3),
+            matrix(3, 0), matrix(3, 1), matrix(3, 2), matrix(3, 3));
 
 		cam->orientation = SbRotation(cameraMatrix);
-		cam->position.setValue(matrix.m4x4[3][0], matrix.m4x4[3][1], matrix.m4x4[3][2]);
+		cam->position.setValue(matrix(3,0), matrix(3,1), matrix(3,2));
 		
 		auto viewer = getViewer();
         SoGetBoundingBoxAction action(viewer->getSoRenderManager()->getViewportRegion());
@@ -267,12 +271,12 @@ long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
 		r.setHeight(r.height() * scaling);
 		r.moveCenter(oldCenter);
 
-		extents.min_x = r.topLeft().x();
-		extents.min_y = r.topLeft().y();
-		extents.max_x = r.bottomRight().x();
-		extents.max_y = r.bottomRight().y();
-		extents.min_z = -1;
-		extents.max_z = 0;
+		extents.min.x = r.topLeft().x();
+		extents.min.y = r.topLeft().y();
+		extents.max.x = r.bottomRight().x();
+		extents.max.y = r.bottomRight().y();
+		extents.min.z = -1;
+		extents.max.z = 0;
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -283,7 +287,7 @@ long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
 	if(is2DView())
 	{
 		auto r = currentView.pView2d->mapToScene(currentView.pView2d->viewport()->geometry()).boundingRect();
-		data2dMap.at(currentView.pView2d).scale = ComputeScale(currentView.pView2d)*r.height()/(extents.max_y-extents.min_y);
+		data2dMap.at(currentView.pView2d).scale = ComputeScale(currentView.pView2d)*r.height()/(extents.max.y-extents.min.y);
 		return 0;
 	}
 	else
@@ -292,7 +296,7 @@ long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
 		GetViewExtents(e);
         if (auto cam = getCamera<SoOrthographicCamera*>())
 		{
-            cam->scaleHeight((extents.max_x - extents.min_x) / (e.max_x - e.min_x));   		
+            cam->scaleHeight((extents.max.x - extents.min.x) / (e.max.x - e.min.x));   		
 			return 0;
 		}
 	}
@@ -346,20 +350,20 @@ long NavlibInterface::GetModelExtents(navlib::box_t &extents) const
 		SoGetBoundingBoxAction action(viewer->getSoRenderManager()->getViewportRegion());
 		action.apply(viewer->getSceneGraph());
 		SbBox3f nbbox = action.getBoundingBox();
-		std::copy(nbbox.getMin().getValue(), nbbox.getMin().getValue() + 3, extents.min.coordinates);
-		std::copy(nbbox.getMax().getValue(), nbbox.getMax().getValue() + 3, extents.max.coordinates);
+		std::copy(nbbox.getMin().getValue(), nbbox.getMin().getValue() + 3, &extents.min.x);
+		std::copy(nbbox.getMax().getValue(), nbbox.getMax().getValue() + 3, &extents.max.x);
         return 0;
 	} 
 	else if (is2DView())
 	{
 		const QRectF modelExtents = data2dMap.at(currentView.pView2d).modelExtents;
 
-		extents.min_x = modelExtents.topLeft().x();
-		extents.min_y = modelExtents.topLeft().y();
-		extents.max_x = modelExtents.bottomRight().x();
-		extents.max_y = modelExtents.bottomRight().y();
-		extents.max_z = 0;
-		extents.min_z = -1;
+		extents.min.x = modelExtents.topLeft().x();
+		extents.min.y = modelExtents.topLeft().y();
+		extents.max.x = modelExtents.bottomRight().x();
+		extents.max.y = modelExtents.bottomRight().y();
+		extents.max.z = 0;
+		extents.min.z = -1;
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
