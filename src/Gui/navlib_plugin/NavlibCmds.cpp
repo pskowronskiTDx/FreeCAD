@@ -157,9 +157,7 @@ void NavlibInterface::ExportCommands(){
 	std::vector<TDx::CImage> images;
 	const auto basicCmds = Gui::Application::Instance->commandManager().getAllCommands();
 	auto workbenches = Gui::Application::Instance->workbenches();
-	// put start workbench at the begining of the list to load first this command set.
-	workbenches[workbenches.indexOf(QString::fromStdString(startWorkbench))] = workbenches[0];
-	workbenches[0] = QString::fromStdString(startWorkbench);
+
 	for (const auto &workbench : workbenches)
 	{
 		if (workbench.toStdString() == "NoneWorkbench")
