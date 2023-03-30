@@ -23,19 +23,14 @@ using TDx::SpaceMouse::CCategory;
 using TDx::SpaceMouse::CCommand;
 using TDx::SpaceMouse::CCommandSet;
 
-static const std::string wkbchStr("Workbench");
-static const std::string startWorkbench("StartWorkbench");
-static const std::string suffix2d("_2D");
-
-
-NavlibInterface::FreecadCmd::FreecadCmd(QAction* action, Gui::Command* cmd, int param): 
+NavlibInterface::FreecadCmd::FreecadCmd(QAction *action, Gui::Command *cmd, int param): 
 										pAction(action), pCommand(cmd), parameter(param){
 	type= Type::NONE;
 	if (cmd->getAction() != nullptr){
 		if(action->isCheckable()){
 			type= Type::CHECKABLE;
 		} 
-		if(Gui::ActionGroup* pcAction = qobject_cast<Gui::ActionGroup*>(pCommand->getAction())){
+		if(auto pcAction = qobject_cast<Gui::ActionGroup*>(pCommand->getAction())){
 			if(pcAction->actions().size()==1){
 				//Group can be checkable too
 				type= Type::CHECKABLE;
@@ -96,7 +91,7 @@ TDx::CImage NavlibInterface::FreecadCmd::extractImage()const{
 	return TDx::CImage::FromData(qbyteArray.toStdString(), 0, id().c_str());
 }
 
-TDx::SpaceMouse::CCommand NavlibInterface::FreecadCmd::extractCmd()const{
+TDx::SpaceMouse::CCommand NavlibInterface::FreecadCmd::toCCommand()const{
 	return CCommand(id(), name(), description());
 }
 
@@ -108,103 +103,96 @@ long NavlibInterface::SetActiveCommand(std::string commandId)
 	return 0;
 }
 
-void NavlibInterface::extractCommand(Gui::Command& cmd, TDx::SpaceMouse::CCategory& cat, std::vector<TDx::CImage>& images){
-	if(Gui::ActionGroup* actionGrp = qobject_cast<Gui::ActionGroup*>(cmd.getAction())){
-		if(actionGrp->actions().size()>1){
-			return extractCommands(*actionGrp, cmd, cat, images);
+void NavlibInterface::extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images){
+	if(auto actionsGroup = qobject_cast<Gui::ActionGroup*>(command.getAction())){
+		if(actionsGroup->actions().size() > 1){
+			return extractCommands(*actionsGroup, command, category, images);
 		}
 	}
-	if(cmd.getAction() == nullptr){
+	if(command.getAction() == nullptr){
 		return;
 	}
 		
-	auto cmdId = cmd.getName();
+	auto commandId = command.getName();
 
-	if(commands.find(cmdId)== commands.end()){
-		commands[cmdId]=std::make_shared<FreecadCmd>(cmd.getAction()->action(), &cmd);
+	if(commands.find(commandId)== commands.end()){
+		commands[commandId]=std::make_shared<FreecadCmd>(command.getAction()->action(), &command);
 	}
-	auto localCmd=commands[cmdId];
+	auto localCommand=commands[commandId];
 
-	if (localCmd->extractCmd().Label == "")
+	if (localCommand->toCCommand().Label == "")
         return;
 
-	cat.push_back(localCmd->extractCmd());
-	if(!cmd.getAction()->icon().isNull()){
-		images.push_back(localCmd->extractImage());
+	category.push_back(localCommand->toCCommand());
+#ifdef WIN32	
+	if(!command.getAction()->icon().isNull()){
+		images.push_back(localCommand->extractImage());
 	}
+#endif
 }
 
-void NavlibInterface::extractCommands(Gui::ActionGroup& actions, Gui::Command& cmd, TDx::SpaceMouse::CCategory& cat, std::vector<TDx::CImage>& images){
-	int actionIdx=0;
-	for(auto action: actions.actions()){
+void NavlibInterface::extractCommands(Gui::ActionGroup &actionsGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images){
+	int index = 0;
+	for(auto action : actionsGroup.actions()){
 		if(action->isSeparator()){
 			continue;
 		}
-		auto cmdId= std::string(cmd.getName())+"_"+action->text().toStdString();
-		auto  localCmd = commands[cmdId]=std::make_shared<FreecadCmd>(action, &cmd, actionIdx++);
+		auto commandId= std::string(command.getName())+"_"+action->text().toStdString();
+		auto localCommand = commands[commandId]=std::make_shared<FreecadCmd>(action, &command, index++);
 
-		if (localCmd->extractCmd().Label == "")
+		if (localCommand->toCCommand().Label == "")
             return;
 
-		cat.push_back(localCmd->extractCmd());
+		category.push_back(localCommand->toCCommand());
+#ifdef WIN32			
 		if(!action->icon().isNull()){
-			images.push_back(localCmd->extractImage());
+			images.push_back(localCommand->extractImage());
 		}
+#endif
 	}
 }
 
-void NavlibInterface::ExportCommands(){
-	std::vector<TDx::CImage> images;
-	const auto basicCmds = Gui::Application::Instance->commandManager().getAllCommands();
-	auto workbenches = Gui::Application::Instance->workbenches();
-
-	for (const auto &workbench : workbenches)
-	{
-		if (workbench.toStdString() == "NoneWorkbench")
-		{
-			continue;
-		}
-		std::string wrkbenchName(workbench.toStdString());
-		auto posStr = wrkbenchName.find(wkbchStr);
-		if (posStr != std::string::npos){
-			wrkbenchName.erase(posStr, wkbchStr.size());
-		}
-		CCommandSet cSet(workbench.toStdString(), wrkbenchName);
-		Gui::Application::Instance->activateWorkbench(workbench.toStdString().c_str());
-		auto workbenchcmds = Gui::Application::Instance->commandManager().getGroupCommands(wrkbenchName.c_str());
-		auto extApp = Gui::Application::Instance->commandManager().getModuleCommands(wrkbenchName.c_str());
-		workbenchcmds.insert(workbenchcmds.end(), basicCmds.begin(), basicCmds.end());
-		workbenchcmds.insert(workbenchcmds.end(), extApp.begin(), extApp.end());
-		for (auto &cmd : workbenchcmds)
-		{
-            if (!(strcmp(cmd->getGroupName(), "<string>") && strcmp(cmd->getGroupName(), "")))
-                cmd->setGroupName("Others");
-			
-			CCategory cCat(cmd->getGroupName(), cmd->getGroupName());
-			extractCommand(*cmd, cCat, images);
-			cSet.push_back(std::move(cCat));
-		}
-		nav3d::AddCommandSet(cSet);
-		if (workbench.toStdString() == startWorkbench)
-		{
-			nav3d::PutActiveCommands(startWorkbench);
-			nav3d::AddImages(images);
-		}
-	}
-	Gui::Application::Instance->activateWorkbench(startWorkbench.c_str());
-	nav3d::AddImages(images);
-	Gui::Application::Instance->signalActivateView.connect(boost::bind(&NavlibInterface::onViewChanged, this, _1));
-	App::GetApplication().signalFinishOpenDocument.connect([this]{
-		onViewChanged(Gui::Application::Instance->activeView());
-	});
-
-	Gui::Application::Instance->signalActivateWorkbench.connect([this](const char *wb)
-																{ onWorkbenchChanged(std::string(wb)); });
-
-}
-
-void NavlibInterface::onWorkbenchChanged(std::string const &workbench)
+void NavlibInterface::exportCommands(const std::string &workbench)
 {
-	nav3d::PutActiveCommands(workbench);
-}
+    static const std::string substring("Workbench");
+	static const std::string noneWorkbench("NoneWorkbench");
 
+    if (workbench == noneWorkbench)
+        return;
+
+    std::string shortName(workbench);
+    auto index = shortName.find(substring);
+
+    if (index != std::string::npos) {
+        shortName.erase(index, substring.size());
+    }
+
+    CCommandSet commandsSet(workbench, shortName);
+
+    static const auto basicCommands = Gui::Application::Instance->commandManager().getAllCommands();
+    auto workbenchCommands = Gui::Application::Instance->commandManager().getGroupCommands(shortName.c_str());
+    auto moduleCommands = Gui::Application::Instance->commandManager().getModuleCommands(shortName.c_str());
+
+    workbenchCommands.insert(workbenchCommands.end(), basicCommands.begin(), basicCommands.end());
+    workbenchCommands.insert(workbenchCommands.end(), moduleCommands.begin(), moduleCommands.end());
+
+    std::vector<TDx::CImage> images;
+
+    for (auto &command : workbenchCommands) {
+
+		std::string groupName(command->getGroupName());
+		
+        if ((groupName == "<string>") || (groupName.empty()))
+            groupName = "Others";
+
+        CCategory category(groupName, groupName);
+        extractCommand(*command, category, images);
+        commandsSet.push_back(std::move(category));
+    }
+
+    nav3d::AddCommandSet(commandsSet);
+    nav3d::PutActiveCommands(workbench);
+#ifdef WIN32
+    nav3d::AddImages(images);
+#endif
+}

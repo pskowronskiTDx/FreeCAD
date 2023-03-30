@@ -115,7 +115,7 @@ NavlibInterface::NavlibInterface()
 	: CNavigation3D(false, false)
 { }
 
-void NavlibInterface::EnableNavigation()
+void NavlibInterface::enableNavigation()
 {
 	PutProfileHint("FreeCAD");
 	nav3d::EnableNavigation(true);
@@ -135,6 +135,11 @@ void NavlibInterface::EnableNavigation()
 			});
 		}
 	}
+	
+	Gui::Application::Instance->signalActivateView.connect(boost::bind(&NavlibInterface::onViewChanged, this, _1));
+    App::GetApplication().signalFinishOpenDocument.connect([this] {onViewChanged(Gui::Application::Instance->activeView());});
+    Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {exportCommands(std::string(wb));});
+
 }
 
 NavlibInterface::~NavlibInterface()

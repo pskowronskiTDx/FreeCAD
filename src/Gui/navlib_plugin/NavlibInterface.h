@@ -31,10 +31,9 @@ public:
 
 	NavlibInterface();
 	~NavlibInterface();
-	void EnableNavigation();
-    long IsUserPivot(navlib::bool_t&) const override;
-    void ExportCommands();
+	void enableNavigation();
 
+	long IsUserPivot(navlib::bool_t&) const override;
 	long GetCameraMatrix(navlib::matrix_t&) const override;
 	long GetPointerPosition(navlib::point_t&) const override;
 	long GetViewExtents(navlib::box_t&) const override;
@@ -90,11 +89,10 @@ private:
     bool is3DView() const;
     bool is2DView() const;
     NavlibInterface::Pivot *getCurrentPivot() const;
-    void onWorkbenchChanged(std::string const&);
-    //cmds
-    void extractCommand(Gui::Command&, TDx::SpaceMouse::CCategory&, std::vector<TDx::CImage>&);
-    void extractCommands(Gui::ActionGroup&, Gui::Command&, TDx::SpaceMouse::CCategory&,
-                         std::vector<TDx::CImage>&);
+	void exportCommands(const std::string &workbench);
+    void extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images);
+    void extractCommands(Gui::ActionGroup &actionGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category,
+                         std::vector<TDx::CImage> &images);
 
 	struct FreecadCmd 
 	{
@@ -105,7 +103,7 @@ private:
         std::string id() const;
         std::string description() const;
         TDx::CImage extractImage() const;
-        TDx::SpaceMouse::CCommand extractCmd() const;
+        TDx::SpaceMouse::CCommand toCCommand() const;
 		QAction *pAction;
 		enum class Type 
 		{

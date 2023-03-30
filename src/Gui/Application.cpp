@@ -2163,8 +2163,7 @@ void Application::runApplication()
     mw.stopSplasher();
     mainApp.setActiveWindow(&mw);
     #ifdef USE_3DCONNEXION_SDK
-    navlibInt->EnableNavigation();
-    navlibInt->ExportCommands();
+    navlibInt->enableNavigation();
     #endif
     // Activate the correct workbench
     std::string start = App::Application::Config()["StartWorkbench"];
