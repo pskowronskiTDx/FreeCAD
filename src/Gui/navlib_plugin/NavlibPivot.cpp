@@ -238,34 +238,35 @@ NavlibInterface::Pivot* NavlibInterface::getCurrentPivot() const
 }
 
 NavlibInterface::Pivot::Pivot()
-	: imagePath(":/icons/3dx_pivot.png")
-	, pTransform(nullptr)
-	, pVisibility(nullptr)
-	, pResetView(nullptr)
-	, pImage(nullptr)
+ : imagePath(":/icons/3dx_pivot.png")
 { }
 
 void NavlibInterface::Pivot::init(SoGroup* grp)
 {
+    pVisibility = new SoSwitch; 
 	pTransform = new SoTransform;
-	pVisibility = new SoSwitch;
-	pResetView = new SoResetTransform;
-	pImage = new SoImage;
-	SoDepthBuffer * deptb = new SoDepthBuffer;
-	deptb->function.setValue(SoDepthBufferElement::ALWAYS);
-	updatePivotResolution();
-	connection=qApp->focusWindow()->connect(qApp->focusWindow(), &QWindow::screenChanged, [this](QScreen*s){updatePivotResolution();});
-	pVisibility->whichChild = SO_SWITCH_NONE;
+	pResetTransform = new SoResetTransform;
+    pImage = new SoImage;
+	pDepthTestAlways = new SoDepthBuffer;
+    pDepthTestLess = new SoDepthBuffer;
+
+	pDepthTestAlways->function.setValue(SoDepthBufferElement::ALWAYS);
+	pDepthTestLess->function.setValue(SoDepthBufferElement::LESS);
+
+    updatePivotResolution();
+    connection=qApp->focusWindow()->connect(qApp->focusWindow(), &QWindow::screenChanged, [this](QScreen*s){updatePivotResolution();});
 	grp->addChild(pVisibility);
-	pVisibility->addChild(deptb);
-	pVisibility->addChild(pResetView);
+	pVisibility->whichChild = SO_SWITCH_NONE;
+	pVisibility->addChild(pDepthTestAlways);
 	pVisibility->addChild(pTransform);
 	pVisibility->addChild(pImage);
+	pVisibility->addChild(pResetTransform);
+	pVisibility->addChild(pDepthTestLess);
 }
 
 bool NavlibInterface::Pivot::isInitialized()
 {
-	return pTransform != nullptr && pVisibility != nullptr && pResetView != nullptr && pImage != nullptr;
+	return pTransform != nullptr && pVisibility != nullptr && pResetTransform != nullptr && pImage != nullptr;
 }
 
 void NavlibInterface::Pivot::updatePivotResolution(){
