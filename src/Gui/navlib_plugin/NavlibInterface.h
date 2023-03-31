@@ -76,8 +76,10 @@ public:
         // open inventor part
         SoTransform *pTransform;
         SoSwitch *pVisibility;
-        SoResetTransform *pResetView;
+        SoResetTransform *pResetTransform;
         SoImage *pImage;
+		SoDepthBuffer *pDepthTestAlways;
+		SoDepthBuffer *pDepthTestLess;
         QMetaObject::Connection connection;    
     };
 
