@@ -1,4 +1,3 @@
-
 #include <PreCompiled.h>
 
 #include<QImage>
@@ -97,7 +96,7 @@ long NavlibInterface::SetSelectionTransform(const navlib::matrix_t &)
 }
 
 long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
-{
+{ /*
 	if (is3DView())
 	{
 		if (auto viewer = getViewer()){
@@ -105,10 +104,10 @@ long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
 			{
 				auto trans = pivot->pTransform->translation.getValue();
 				std::copy(trans.getValue(), trans.getValue() + 3, &position.x);
-				return 0;
+				return 0; 
 			}
 		}
-	}
+	}*/
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
@@ -217,9 +216,11 @@ long NavlibInterface::SetHitLookFrom(const navlib::point_t &eye)
 
 long NavlibInterface::SetHitSelectionOnly(bool hitSelection)
 {
-	ray.selectionOnly = hitSelection;
-	return 0;
+    ray.selectionOnly = hitSelection;
+    return 0;
 }
+
+
 
 NavlibInterface::Pivot* NavlibInterface::getCurrentPivot() const
 {
@@ -238,8 +239,14 @@ NavlibInterface::Pivot* NavlibInterface::getCurrentPivot() const
 }
 
 NavlibInterface::Pivot::Pivot()
- : imagePath(":/icons/3dx_pivot.png")
-{ }
+    : imagePath(":/icons/3dx_pivot.png"),
+      pTransform(nullptr),
+      pVisibility(nullptr),
+      pResetTransform(nullptr),
+      pImage(nullptr),
+      pDepthTestAlways(nullptr),
+      pDepthTestLess(nullptr)
+{}
 
 void NavlibInterface::Pivot::init(SoGroup* grp)
 {
