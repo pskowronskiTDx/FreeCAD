@@ -80,40 +80,50 @@ void NavlibInterface::onViewChanged(const Gui::MDIView* view)
 			Write(navlib::views_front_k, front);
 			return;
 		}
-	}
-
-	currentView.pView3d = nullptr;
-	for (auto viewinternal : view->findChildren<QGraphicsView*>()) 
-	{
-		for (auto svgitem : viewinternal->findChildren<QGraphicsScene*>()) 
-		{
-			for (auto item : svgitem->items()) 
-			{
-				if (auto it = dynamic_cast<QGraphicsSvgItem*>(item)) 
-				{
-					if (it->isActive() && it->isEnabled() && it->isVisible())
-					{
-						currentView.pView2d = svgitem->views().first();
-						if (data2dMap.find(currentView.pView2d) == data2dMap.end())
-						{
-							auto& elem = data2dMap[currentView.pView2d] = Navigation2D();
-							elem.init(currentView.pView2d);
-							elem.updateGraphics(currentView.pView2d);
-						}
-						navlib::box_t me;
-						GetModelExtents(me);
-						Write(navlib::model_extents_k, me);
-						return;
-					}
-				}
-			}
-		}
+		currentView.pView3d = nullptr;
+        for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
+            for (auto svgitem : viewinternal->findChildren<QGraphicsScene*>()) {
+                for (auto item : svgitem->items()) {
+                    if (auto it = dynamic_cast<QGraphicsSvgItem*>(item)) {
+                        if (it->isActive() && it->isEnabled() && it->isVisible()) {
+                            currentView.pView2d = svgitem->views().first();
+                            if (data2dMap.find(currentView.pView2d) == data2dMap.end()) {
+                                auto& elem = data2dMap[currentView.pView2d] = Navigation2D();
+                                elem.init(currentView.pView2d);
+                                elem.updateGraphics(currentView.pView2d);
+                            }
+                            navlib::box_t me;
+                            GetModelExtents(me);
+                            Write(navlib::model_extents_k, me);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
 	}
 }
 
-NavlibInterface::NavlibInterface() 
-	: CNavigation3D(false, false)
-{ }
+NavlibInterface::NavlibInterface()
+    : CNavigation3D(false, false),
+      pivotImage(QString::fromStdString(":/icons/3dx_pivot.png"))
+{
+    if (hitTestingResolution > 0) {
+        hitTestPattern[0][0] = 0.0;
+        hitTestPattern[0][1] = 0.0;
+    }
+
+    for (uint32_t i = 1; i < hitTestingResolution; i++) {
+        float coefficient = sqrt(static_cast<float>(i) / static_cast<float>(hitTestingResolution));
+        float angle = 2.4f * static_cast<float>(i);
+        float x = coefficient * sin(angle);
+        float y = coefficient * cos(angle);
+        hitTestPattern[i][0] = x;
+        hitTestPattern[i][1] = y;
+    }
+
+
+}
 
 void NavlibInterface::enableNavigation()
 {

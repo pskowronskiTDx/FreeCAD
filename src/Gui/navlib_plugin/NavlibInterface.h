@@ -9,6 +9,8 @@
 
 #include <QMatrix4x4>
 
+constexpr uint32_t hitTestingResolution = 30;
+
 using nav3d = TDx::SpaceMouse::Navigation3D::CNavigation3D;
 
 class QGraphicsView;
@@ -68,19 +70,15 @@ public:
 	struct Pivot
     {
         Pivot();
-        ~Pivot();
-        void init(SoGroup*);
+        void initialize(SoGroup *const pGroup, const QImage &qImage);
         bool isInitialized();
-        void updatePivotResolution();
-        const std::string imagePath;
         // open inventor part
         SoTransform *pTransform;
         SoSwitch *pVisibility;
         SoResetTransform *pResetTransform;
         SoImage *pImage;
 		SoDepthBuffer *pDepthTestAlways;
-		SoDepthBuffer *pDepthTestLess;
-        QMetaObject::Connection connection;    
+		SoDepthBuffer *pDepthTestLess;  
     };
 
 private:
@@ -144,5 +142,7 @@ private:
     std::unordered_map<const Gui::Document*, std::shared_ptr<NavlibInterface::Pivot>> doc2Pivot;
     std::pair<int, std::string> activeTab = {-1, ""};
     std::unordered_map<std::string, std::shared_ptr<FreecadCmd>> commands;
+    QImage pivotImage;
+    std::array<SbVec2f, hitTestingResolution> hitTestPattern;
 };
 #endif // NAVLIB_PLUGIN_NAVLIB_INTERFACE_H

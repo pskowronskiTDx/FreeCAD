@@ -32,29 +32,6 @@
 
 #include <Gui/Document.h>
 
-// initiliazed pivot wether it is possible. And return true if this initialization has been done. False otherwise.
-bool InitPivot(NavlibInterface::Pivot* pivot)
-{
-	Gui::Document* doc = Gui::Application::Instance->activeDocument();
-	if (doc) 
-	{
-		if (auto view = dynamic_cast<Gui::View3DInventor*>(doc->getActiveView())) 
-		{
-			if (auto viewer = view->getViewer()) 
-			{
-				if (auto grp = dynamic_cast<SoGroup*>(viewer->getSceneGraph())) 
-				{
-					if (!pivot->isInitialized())
-					{
-						pivot->init(grp);
-					}
-					return true;
-				}
-			}
-		}
-	}
-	return false;
-}
 
 long NavlibInterface::GetPointerPosition(navlib::point_t &position) const
 {
@@ -96,18 +73,7 @@ long NavlibInterface::SetSelectionTransform(const navlib::matrix_t &)
 }
 
 long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
-{ /*
-	if (is3DView())
-	{
-		if (auto viewer = getViewer()){
-			if (auto pivot = getCurrentPivot()) 
-			{
-				auto trans = pivot->pTransform->translation.getValue();
-				std::copy(trans.getValue(), trans.getValue() + 3, &position.x);
-				return 0; 
-			}
-		}
-	}*/
+{ 
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
@@ -156,25 +122,48 @@ long NavlibInterface::SetPivotVisible(bool visible)
 	return 0;
 }
 
-long NavlibInterface::GetHitLookAt(navlib::point_t &position) const
+long NavlibInterface::GetHitLookAt(navlib::point_t& position) const
 {
-	if (auto viewer = getViewer())
-	{
-		if (auto graph = viewer->getSceneGraph())
-		{
-			SoRayPickAction rpaction(viewer->getSoRenderManager()->getViewportRegion());
-			rpaction.setRay(ray.origin, ray.direction);
-			rpaction.apply(graph);
-			SoPickedPoint *picked = rpaction.getPickedPoint();
-			if (picked != nullptr)
-			{
-				auto hitpoint = picked->getPoint();
-				std::copy(hitpoint.getValue(), hitpoint.getValue() + 3, &position.x);
-				return 0;
-			}
-		}
-	}
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    if (auto viewer = getViewer()) {
+        if (auto sceneGraph = viewer->getSceneGraph()) {
+
+            SoRayPickAction rayPickAction(viewer->getSoRenderManager()->getViewportRegion());
+            SbMatrix cameraMatrix;
+            SbVec3f closestHitPoint;
+            float minLength = std::numeric_limits<float>::max();
+
+            getCamera()->orientation.getValue().getValue(cameraMatrix);
+
+            for (uint32_t i = 0; i < hitTestingResolution; i++) {
+
+                SbVec3f transform(
+                    hitTestPattern[i][0] * ray.radius, hitTestPattern[i][1] * ray.radius, 0.0f);
+
+                cameraMatrix.multVecMatrix(transform, transform);
+
+                SbVec3f newOrigin = ray.origin + transform;
+
+                rayPickAction.setRay(newOrigin, ray.direction);
+                rayPickAction.apply(sceneGraph);
+                SoPickedPoint* pickedPoint = rayPickAction.getPickedPoint();
+
+                if (pickedPoint != nullptr) {
+                    SbVec3f hitPoint = pickedPoint->getPoint();
+                    float distance = (newOrigin - hitPoint).length();
+
+                    if (distance < minLength) {
+                        minLength = distance;
+                        closestHitPoint = hitPoint;
+                    }
+                }
+            }
+            if (minLength < std::numeric_limits<float>::max()) {
+                std::copy(closestHitPoint.getValue(), closestHitPoint.getValue() + 3, &position.x);
+                return 0;
+            }
+        }
+    }
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
 long NavlibInterface::GetSelectionExtents(navlib::box_t &extents) const
@@ -224,23 +213,29 @@ long NavlibInterface::SetHitSelectionOnly(bool hitSelection)
 
 NavlibInterface::Pivot* NavlibInterface::getCurrentPivot() const
 {
-	if (const Gui::Document* doc = Gui::Application::Instance->activeDocument())
-	{
-		if (doc2Pivot.find(doc) != doc2Pivot.end())
-		{
-			auto pivot = doc2Pivot.at(doc).get();
-			if (InitPivot(pivot))
-			{
-				return pivot;
-			}
-		}
-	}
-	return nullptr;
+    if (const Gui::Document* doc = Gui::Application::Instance->activeDocument()) {
+        if (doc2Pivot.find(doc) != doc2Pivot.end()) {
+            auto pivot = doc2Pivot.at(doc).get();
+
+            if (doc) {
+                if (auto view = dynamic_cast<Gui::View3DInventor*>(doc->getActiveView())) {
+                    if (auto viewer = view->getViewer()) {
+                        if (auto grp = dynamic_cast<SoGroup*>(viewer->getSceneGraph())) {
+                            if (!pivot->isInitialized()) {
+                                pivot->initialize(grp, pivotImage);
+                            }
+                            return pivot;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
 NavlibInterface::Pivot::Pivot()
-    : imagePath(":/icons/3dx_pivot.png"),
-      pTransform(nullptr),
+    : pTransform(nullptr),
       pVisibility(nullptr),
       pResetTransform(nullptr),
       pImage(nullptr),
@@ -248,7 +243,7 @@ NavlibInterface::Pivot::Pivot()
       pDepthTestLess(nullptr)
 {}
 
-void NavlibInterface::Pivot::init(SoGroup* grp)
+void NavlibInterface::Pivot::initialize(SoGroup* const pGroup, const QImage& qImage)
 {
     pVisibility = new SoSwitch; 
 	pTransform = new SoTransform;
@@ -257,13 +252,13 @@ void NavlibInterface::Pivot::init(SoGroup* grp)
 	pDepthTestAlways = new SoDepthBuffer;
     pDepthTestLess = new SoDepthBuffer;
 
-	pDepthTestAlways->function.setValue(SoDepthBufferElement::ALWAYS);
-	pDepthTestLess->function.setValue(SoDepthBufferElement::LESS);
+    pVisibility->whichChild = SO_SWITCH_NONE;
+    pDepthTestAlways->function.setValue(SoDepthBufferElement::ALWAYS);
+    pDepthTestLess->function.setValue(SoDepthBufferElement::LESS);
 
-    updatePivotResolution();
-    connection=qApp->focusWindow()->connect(qApp->focusWindow(), &QWindow::screenChanged, [this](QScreen*s){updatePivotResolution();});
-	grp->addChild(pVisibility);
-	pVisibility->whichChild = SO_SWITCH_NONE;
+    Gui::BitmapFactory().convert(qImage, pImage->image); 
+	
+	pGroup->addChild(pVisibility);
 	pVisibility->addChild(pDepthTestAlways);
 	pVisibility->addChild(pTransform);
 	pVisibility->addChild(pImage);
@@ -273,15 +268,5 @@ void NavlibInterface::Pivot::init(SoGroup* grp)
 
 bool NavlibInterface::Pivot::isInitialized()
 {
-	return pTransform != nullptr && pVisibility != nullptr && pResetTransform != nullptr && pImage != nullptr;
-}
-
-void NavlibInterface::Pivot::updatePivotResolution(){
-	QImage qimage(QString::fromStdString(imagePath));
-	qimage= qimage.scaled(qimage.size()*qApp->focusWindow()->devicePixelRatio());
-	Gui::BitmapFactory().convert(qimage, pImage->image); 
-}
-
-NavlibInterface::Pivot::~Pivot(){
-  qApp->focusWindow()->disconnect(connection);
+	return pVisibility != nullptr;
 }
