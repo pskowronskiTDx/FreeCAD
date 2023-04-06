@@ -115,7 +115,7 @@ if (QtWebEngineWidgets_FOUND AND BUILD_WITH_CONDA)
         ${Qt5WinExtras_LIBRARIES}
       )
     endif()
-
+	#[[
 IF(SPNAV_FOUND)
     if(SPNAV_USE_X11)
       add_definitions(-DSPNAV_USE_X11)
@@ -159,7 +159,7 @@ IF(SPNAV_FOUND)
         ${SPNAV_LIBRARIES}
     )
 ENDIF(SPNAV_FOUND)
-
+]]
 IF(OCULUS_FOUND)
     add_definitions(-DOCULUS_FOUND)
     include_directories(
@@ -1162,7 +1162,7 @@ SET(FreeCADGui_SRCS
     GraphicsViewZoom.h
     GuiApplication.h
     GuiApplicationNativeEventAware.h
-    3Dconnexion/GuiAbstractNativeEvent.h
+    #3Dconnexion/GuiAbstractNativeEvent.h
     GuiConsole.h
     InventorAll.h
     Macro.h
