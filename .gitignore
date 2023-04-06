@@ -50,3 +50,4 @@ files_to_translate.txt
 /out/build/x64-Debug
 /.gitignore
 /CMakeSettings.json
+/bld_2
