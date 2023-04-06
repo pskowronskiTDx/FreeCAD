@@ -81,6 +81,7 @@ std::string NavlibInterface::FreecadCmd::description()const{
 	}
 }
 
+#ifdef WIN32
 TDx::CImage NavlibInterface::FreecadCmd::extractImage()const{
 	QIcon iconImg = pAction->icon();
 	QImage qimage = iconImg.pixmap(QSize(256, 256)).toImage();
@@ -90,6 +91,7 @@ TDx::CImage NavlibInterface::FreecadCmd::extractImage()const{
 	QString iconBase64 = QString::fromLatin1(qbyteArray.toBase64().data());
 	return TDx::CImage::FromData(qbyteArray.toStdString(), 0, id().c_str());
 }
+#endif
 
 TDx::SpaceMouse::CCommand NavlibInterface::FreecadCmd::toCCommand()const{
 	return CCommand(id(), name(), description());
@@ -190,9 +192,9 @@ void NavlibInterface::exportCommands(const std::string &workbench)
         commandsSet.push_back(std::move(category));
     }
 
-    nav3d::AddCommandSet(commandsSet);
-    nav3d::PutActiveCommands(workbench);
+    CNav3D::AddCommandSet(commandsSet);
+    CNav3D::PutActiveCommands(workbench);
 #ifdef WIN32
-    nav3d::AddImages(images);
+    CNav3D::AddImages(images);
 #endif
 }

@@ -63,25 +63,37 @@ Gui::View3DInventorViewer* NavlibInterface::getViewer() const
 }
 
 void NavlibInterface::onViewChanged(const Gui::MDIView* view) 
-{
-	nav3d::Write(navlib::motion_k, false);
+{	CNav3D::Write(navlib::motion_k, false);
 	QTimer::singleShot(1000, [this]
-	{ nav3d::Write(navlib::motion_k, true); });
+	{ CNav3D::Write(navlib::motion_k, true); });
 	if (view != nullptr) 
 	{
-		if (auto view3d = dynamic_cast<const Gui::View3DInventor*>(view)) 
+		if (auto pView3d = dynamic_cast<const Gui::View3DInventor*>(view)) 
 		{
-			currentView.pView3d = view3d;
-			currentView.pView2d = nullptr;
-			navlib::matrix_t coord, front;
-			GetCoordinateSystem(coord);
-			GetFrontView(front);
-			Write(navlib::coordinate_system_k, coord);
-			Write(navlib::views_front_k, front);
+			currentView.pView3d = pView3d;
+            currentView.pView2d = nullptr; 
+
+			if (auto viewer = currentView.pView3d->getViewer()) {
+                if (auto group = dynamic_cast<SoGroup*>(viewer->getSceneGraph())) {
+					if (group->findChild(pivot.pVisibility) == -1) {
+                        group->addChild(pivot.pVisibility);
+					}                 
+                }
+            }
+		
+			navlib::box_t extents;
+            navlib::matrix_t camera;
+
+			GetModelExtents(extents);        
+			GetCameraMatrix(camera);
+
+            Write(navlib::model_extents_k, extents);
+            Write(navlib::view_affine_k, camera);
+            
 			return;
 		}
 		currentView.pView3d = nullptr;
-        for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
+        /*for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
             for (auto svgitem : viewinternal->findChildren<QGraphicsScene*>()) {
                 for (auto item : svgitem->items()) {
                     if (auto it = dynamic_cast<QGraphicsSvgItem*>(item)) {
@@ -100,13 +112,12 @@ void NavlibInterface::onViewChanged(const Gui::MDIView* view)
                     }
                 }
             }
-        }
+        }*/
 	}
 }
 
 NavlibInterface::NavlibInterface()
-    : CNavigation3D(false, false),
-      pivotImage(QString::fromStdString(":/icons/3dx_pivot.png"))
+    : CNavigation3D(false, false)
 {
     if (hitTestingResolution > 0) {
         hitTestPattern[0][0] = 0.0;
@@ -121,23 +132,15 @@ NavlibInterface::NavlibInterface()
         hitTestPattern[i][0] = x;
         hitTestPattern[i][1] = y;
     }
-
-
 }
 
 void NavlibInterface::enableNavigation()
 {
 	PutProfileHint("FreeCAD");
-	nav3d::EnableNavigation(true);
+	CNav3D::EnableNavigation(true);
 	PutFrameTimingSource(TimingSource::SpaceMouse);
 	Write(navlib::active_k, true);
-	// maintains map of pivots.
-	Gui::Application::Instance->signalNewDocument.connect([this](const Gui::Document& doc, bool) {
-		doc2Pivot[&doc] = std::make_shared<NavlibInterface::Pivot>();
-	});
-	Gui::Application::Instance->signalDeleteDocument.connect([this](const Gui::Document& doc) {
-		doc2Pivot.erase(&doc);
-	});
+	
 	if (auto area = Gui::MainWindow::getInstance()->findChild<QMdiArea*>()) {
 		if (auto tabs = area->findChild<QTabBar*>()) {
 			tabs->connect(tabs, &QTabBar::currentChanged, [this, tabs](int idx) {
@@ -145,16 +148,21 @@ void NavlibInterface::enableNavigation()
 			});
 		}
 	}
-	
-	Gui::Application::Instance->signalActivateView.connect(boost::bind(&NavlibInterface::onViewChanged, this, _1));
-    App::GetApplication().signalFinishOpenDocument.connect([this] {onViewChanged(Gui::Application::Instance->activeView());});
-    Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {exportCommands(std::string(wb));});
 
+    initializePivot();
+	Gui::Application::Instance->signalActivateView.connect(boost::bind(&NavlibInterface::onViewChanged, this, _1));
+    Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {exportCommands(std::string(wb));});
 }
 
 NavlibInterface::~NavlibInterface()
 {
-	nav3d::EnableNavigation(false);
+	CNav3D::EnableNavigation(false);
+    pivot.pTransform = nullptr;
+    pivot.pVisibility = nullptr;
+    pivot.pResetTransform = nullptr;
+    pivot.pImage = nullptr;
+    pivot.pDepthTestAlways = nullptr;
+    pivot.pDepthTestLess = nullptr;
 }
 
 long NavlibInterface::GetCameraMatrix(navlib::matrix_t& matrix) const
