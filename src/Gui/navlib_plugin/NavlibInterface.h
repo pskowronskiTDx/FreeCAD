@@ -11,7 +11,7 @@
 
 constexpr uint32_t hitTestingResolution = 30;
 
-using nav3d = TDx::SpaceMouse::Navigation3D::CNavigation3D;
+using CNav3D = TDx::SpaceMouse::Navigation3D::CNavigation3D;
 
 class QGraphicsView;
 class QAction;
@@ -26,7 +26,7 @@ namespace Gui
 	class ActionGroup;
 }
 
-class NavlibInterface : public nav3d 
+class NavlibInterface : public CNav3D 
 {
 
 public:
@@ -67,28 +67,14 @@ public:
 	long SetActiveCommand(std::string) override;
 	long SetTransaction(long) override;
 
-	struct Pivot
-    {
-        Pivot();
-        void initialize(SoGroup *const pGroup, const QImage &qImage);
-        bool isInitialized();
-        // open inventor part
-        SoTransform *pTransform;
-        SoSwitch *pVisibility;
-        SoResetTransform *pResetTransform;
-        SoImage *pImage;
-		SoDepthBuffer *pDepthTestAlways;
-		SoDepthBuffer *pDepthTestLess;  
-    };
-
 private:
 
+	void initializePivot();
 	template<class cameraOut = SoCamera*> cameraOut getCamera() const;
     Gui::View3DInventorViewer *getViewer() const;
     void onViewChanged(const Gui::MDIView*);
     bool is3DView() const;
     bool is2DView() const;
-    NavlibInterface::Pivot *getCurrentPivot() const;
 	void exportCommands(const std::string &workbench);
     void extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images);
     void extractCommands(Gui::ActionGroup &actionGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category,
@@ -102,7 +88,9 @@ private:
         std::string name() const;
         std::string id() const;
         std::string description() const;
+#ifdef WIN32
         TDx::CImage extractImage() const;
+#endif
         TDx::SpaceMouse::CCommand toCCommand() const;
 		QAction *pAction;
 		enum class Type 
@@ -138,11 +126,19 @@ private:
         bool selectionOnly;
     } ray;
 
+	struct
+    {
+        SoTransform* pTransform = nullptr;
+        SoSwitch* pVisibility = nullptr;
+        SoResetTransform* pResetTransform = nullptr;
+        SoImage* pImage = nullptr;
+        SoDepthBuffer* pDepthTestAlways = nullptr;
+        SoDepthBuffer* pDepthTestLess = nullptr;
+    } pivot;
+
 	std::unordered_map<QGraphicsView*, Navigation2D> data2dMap;
-    std::unordered_map<const Gui::Document*, std::shared_ptr<NavlibInterface::Pivot>> doc2Pivot;
     std::pair<int, std::string> activeTab = {-1, ""};
     std::unordered_map<std::string, std::shared_ptr<FreecadCmd>> commands;
-    QImage pivotImage;
     std::array<SbVec2f, hitTestingResolution> hitTestPattern;
 };
 #endif // NAVLIB_PLUGIN_NAVLIB_INTERFACE_H
