@@ -134,6 +134,7 @@ private:
         SoImage* pImage = nullptr;
         SoDepthBuffer* pDepthTestAlways = nullptr;
         SoDepthBuffer* pDepthTestLess = nullptr;
+        QImage pivotImage;
     } pivot;
 
 	std::unordered_map<QGraphicsView*, Navigation2D> data2dMap;

@@ -257,6 +257,9 @@ if(FREECAD_USE_3DCONNEXION AND(APPLE OR MSVC))
         navlib_plugin/NavlibPivot.cpp
     )
     SOURCE_GROUP("official 3Dconnexion SDK" FILES ${FreeCADGui_SDK_SRCS})
+	SET(FreeCADGui_SDK_MOC_HDRS
+		navlib_plugin/NavlibInterface.h
+	)
 endif(FREECAD_USE_3DCONNEXION AND(APPLE OR MSVC))
 
 
