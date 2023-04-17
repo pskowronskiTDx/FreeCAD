@@ -260,6 +260,8 @@ void ViewProviderSketch::ParameterObserver::initParameters()
     }
 
     // unsubscribed parameters which update a property on just once upon construction (and before restore if properties are being restored from a file)
+    updateColorProperty("SketchEdgeColor", &Client.LineColor, 1.0f, 1.0f, 1.0f);
+    updateColorProperty("SketchVertexColor", &Client.PointColor, 1.0f, 1.0f, 1.0f);
     updateBoolProperty("ShowGrid", &Client.ShowGrid, false);
     updateBoolProperty("GridAuto", &Client.GridAuto, true);
     updateGridSize("GridSize", &Client.GridSize);
@@ -439,7 +441,7 @@ void ViewProviderSketch::moveCursorToSketchPoint(Base::Vector2d point) {
 
     Gui::View3DInventorViewer* viewer = view->getViewer();
 
-    SbVec2s screencoords = viewer->getPointOnScreen(sbpoint);
+    SbVec2s screencoords = viewer->getPointOnViewport(sbpoint);
 
     short x,y; screencoords.getValue(x,y);
 
@@ -475,7 +477,7 @@ void ViewProviderSketch::preselectAtPoint(Base::Vector2d point)
 
         Gui::View3DInventorViewer* viewer = view->getViewer();
 
-        SbVec2s screencoords = viewer->getPointOnScreen(sbpoint);
+        SbVec2s screencoords = viewer->getPointOnViewport(sbpoint);
 
         std::unique_ptr<SoPickedPoint> Point(this->getPointOnRay(screencoords, viewer));
 
