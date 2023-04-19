@@ -75,8 +75,9 @@ void NavlibInterface::onViewChanged(const Gui::MDIView* view)
 
 			if (auto viewer = currentView.pView3d->getViewer()) {
                 if (auto group = dynamic_cast<SoGroup*>(viewer->getSceneGraph())) {
-                    initializePivot();
-                    group->addChild(pivot.pVisibility);
+					if (group->findChild(pivot.pVisibility) == -1) {
+                        group->addChild(pivot.pVisibility);
+					}
                 }
             }
 			
@@ -118,7 +119,6 @@ void NavlibInterface::onViewChanged(const Gui::MDIView* view)
 NavlibInterface::NavlibInterface()
     : CNavigation3D(false, false)
 {
-    pivot.pivotImage = QImage(QString::fromStdString(":/icons/3dx_pivot.png"));
 
     if (hitTestingResolution > 0) {
         hitTestPattern[0][0] = 0.0;
@@ -152,17 +152,15 @@ void NavlibInterface::enableNavigation()
 
 	Gui::Application::Instance->signalActivateView.connect(boost::bind(&NavlibInterface::onViewChanged, this, _1));
     Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {exportCommands(std::string(wb));});
+    initializePivot();
 }
 
 NavlibInterface::~NavlibInterface()
 {
 	CNav3D::EnableNavigation(false);
-    pivot.pTransform = nullptr;
-    pivot.pVisibility = nullptr;
-    pivot.pResetTransform = nullptr;
-    pivot.pImage = nullptr;
-    pivot.pDepthTestAlways = nullptr;
-    pivot.pDepthTestLess = nullptr;
+	if (pivot.pVisibility != nullptr) {
+        pivot.pVisibility->unref();
+	}
 }
 
 long NavlibInterface::GetCameraMatrix(navlib::matrix_t& matrix) const
