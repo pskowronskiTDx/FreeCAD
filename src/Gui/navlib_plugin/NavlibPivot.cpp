@@ -38,12 +38,11 @@ long NavlibInterface::GetPointerPosition(navlib::point_t &position) const
 {
 	if (is2DView())
 	{
-	    QPoint viewPoint = currentView.pView2d->mapFromGlobal(QCursor::pos());
-		auto const& data2d = data2dMap.at(currentView.pView2d);
-		QPointF size(data2d.modelExtents.width(), (data2d.modelExtents.height()));
-		auto sceneVP = (currentView.pView2d->mapToScene(viewPoint) - size / 2.0) / data2d.scale;
-		QVector4D pos = data2d.data * QVector4D(sceneVP.x(), -sceneVP.y(), 1, 1);
-		position = { pos.x(), pos.y(), 0 };
+		QPoint point = currentView.pView2d->mapFromGlobal(QCursor::pos());
+        point = currentView.pView2d->mapToScene(point).toPoint();
+        position.x = point.x();
+        position.y = - point.y();
+
 		return 0;
 	}
 	if (auto viewer = getViewer())

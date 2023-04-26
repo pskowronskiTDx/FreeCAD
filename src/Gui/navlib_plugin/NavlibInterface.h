@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <Inventor/nodes/SoResetTransform.h>
+#include <Gui/ViewProvider.h>
 
 #include <QMatrix4x4>
 
@@ -88,29 +89,21 @@ private:
         std::string name() const;
         std::string id() const;
         std::string description() const;
+        TDx::SpaceMouse::CCommand toCCommand() const;
 #ifdef WIN32
         TDx::CImage extractImage() const;
 #endif
-        TDx::SpaceMouse::CCommand toCCommand() const;
-		QAction *pAction;
-		enum class Type 
-		{
-			NONE,
-			CHECKABLE,
-			GROUP
-		} type;
+        enum class Type
+        {
+            NONE,
+            CHECKABLE,
+            GROUP
+        } type;
+
+		QAction *pAction;		
 		Gui::Command *pCommand;
 		int parameter;
 	};
-
-	struct Navigation2D 
-	{
-		void init(QGraphicsView *v);
-        void updateGraphics(QGraphicsView*) const;
-		QRectF modelExtents;
-		QMatrix4x4 data;
-		double scale;
-	} navigation2d;
 
 	struct
     {
@@ -137,7 +130,6 @@ private:
         QImage pivotImage;
     } pivot;
 
-	std::unordered_map<QGraphicsView*, Navigation2D> data2dMap;
     std::pair<int, std::string> activeTab = {-1, ""};
     std::unordered_map<std::string, std::shared_ptr<FreecadCmd>> commands;
     std::array<SbVec2f, hitTestingResolution> hitTestPattern;

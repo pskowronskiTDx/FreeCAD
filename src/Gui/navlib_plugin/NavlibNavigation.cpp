@@ -31,12 +31,6 @@
 #include <QTimer>
 #include <QGraphicsSvgItem>
 
-double ComputeScale(QGraphicsView* v)
-{
-	const auto t = v->transform();
-	return std::sqrt(t.m11() * t.m11() + t.m12() * t.m12());
-}
-
 template<class cameraOut>
 cameraOut NavlibInterface::getCamera() const
 {
@@ -92,27 +86,20 @@ void NavlibInterface::onViewChanged(const Gui::MDIView* view)
             
 			return;
 		}
-		currentView.pView3d = nullptr;
-        /*for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
-            for (auto svgitem : viewinternal->findChildren<QGraphicsScene*>()) {
-                for (auto item : svgitem->items()) {
-                    if (auto it = dynamic_cast<QGraphicsSvgItem*>(item)) {
-                        if (it->isActive() && it->isEnabled() && it->isVisible()) {
-                            currentView.pView2d = svgitem->views().first();
-                            if (data2dMap.find(currentView.pView2d) == data2dMap.end()) {
-                                auto& elem = data2dMap[currentView.pView2d] = Navigation2D();
-                                elem.init(currentView.pView2d);
-                                elem.updateGraphics(currentView.pView2d);
-                            }
-                            navlib::box_t me;
-                            GetModelExtents(me);
-                            Write(navlib::model_extents_k, me);
-                            return;
-                        }
-                    }
+        currentView.pView3d = nullptr; 	
+
+        for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
+
+            auto views = viewinternal->scene()->views();
+
+            for (auto view : views) {
+                if (view->isActiveWindow()) {
+                    currentView.pView2d = view;
+                    return;
                 }
             }
-        }*/
+        }
+        currentView.pView2d = nullptr; 
 	}
 }
 
@@ -182,21 +169,33 @@ long NavlibInterface::GetCameraMatrix(navlib::matrix_t& matrix) const
 			return 0;
 		}
 	}
-	else if (is2DView())
-	{
-		std::copy(data2dMap.at(currentView.pView2d).data.data(), data2dMap.at(currentView.pView2d).data.data() + 16, &matrix.m00);
-		return 0;
-	}
+    else if (is2DView()) {
+        QMatrix4x4 data;
+        QWidget* viewport = currentView.pView2d->viewport();
+        QPointF viewportCenter(viewport->width() / 2.0, viewport->height() / 2.0);
+        QPointF scenePoint = currentView.pView2d->mapToScene(viewportCenter.toPoint());
+
+        data(0, 3) = scenePoint.x();
+        data(1, 3) = -scenePoint.y();
+        data(2, 3) = 150.0;
+        
+        std::copy(data.data(), data.data() + 16, &matrix.m00);
+        return 0;
+    }
 	return navlib::make_result_code(navlib::navlib_errc::function_not_supported);
 }
 
 long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
 {
-	if (is2DView())
-	{
-		std::copy(&matrix.m00, &matrix.m33, data2dMap.at(currentView.pView2d).data.data());
-		return 0;
-	}
+    if (is2DView()) {
+
+        QMatrix4x4 data;
+
+        std::copy(&matrix.m00, &matrix.m33, data.data());
+        currentView.pView2d->centerOn(data(0, 3), -data(1, 3));
+
+        return 0;
+    }
 	else if (auto cam = getCamera()) {
         
         SbMatrix cameraMatrix(
@@ -276,28 +275,25 @@ long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
 {
 	if (auto cam = getCamera<SoOrthographicCamera*>())
 	{
-		auto vVol = cam->getViewVolume(cam->aspectRatio.getValue());
-		float halfHeight = vVol.getHeight() / 2.0f;
-        float halfWidth = vVol.getWidth() / 2.0f;
-		auto farDist = vVol.nearToFar + vVol.nearDist;
+		const SbViewVolume vVol = cam->getViewVolume(cam->aspectRatio.getValue());
+		const float halfHeight = vVol.getHeight() / 2.0f;
+        const float halfWidth = vVol.getWidth() / 2.0f;
+		const float farDist = vVol.nearToFar + vVol.nearDist;
 		extents = { -halfWidth, -halfHeight , -farDist, halfWidth, halfHeight, farDist };
         return 0;
     }
 	else if (is2DView())
-	{
-		auto r = currentView.pView2d->mapToScene(currentView.pView2d->viewport()->geometry()).boundingRect();
-		auto scaling = ComputeScale(currentView.pView2d) / (data2dMap.at(currentView.pView2d).scale);
-		auto oldCenter = r.center();
-		r.setWidth(r.width() * scaling);
-		r.setHeight(r.height() * scaling);
-		r.moveCenter(oldCenter);
+	{      	
+		const QRectF viewRectangle = currentView.pView2d->mapToScene(
+			currentView.pView2d->viewport()->geometry()).boundingRect();
 
-		extents.min.x = r.topLeft().x();
-		extents.min.y = r.topLeft().y();
-		extents.max.x = r.bottomRight().x();
-		extents.max.y = r.bottomRight().y();
-		extents.min.z = -1;
-		extents.max.z = 0;
+        extents.min.x = viewRectangle.topLeft().x();
+        extents.min.y = viewRectangle.topLeft().y();
+        extents.max.x = viewRectangle.bottomRight().x();
+        extents.max.y = viewRectangle.bottomRight().y();
+        extents.min.z = -1;
+        extents.max.z = 0;
+	
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -305,16 +301,33 @@ long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
 
 long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
 {
-	if(is2DView())
-	{
-		auto r = currentView.pView2d->mapToScene(currentView.pView2d->viewport()->geometry()).boundingRect();
-		data2dMap.at(currentView.pView2d).scale = ComputeScale(currentView.pView2d)*r.height()/(extents.max.y-extents.min.y);
+	if(is2DView()) { 
+		
+		const QRectF viewRectangle = currentView.pView2d->mapToScene(
+			currentView.pView2d->viewport()->geometry()).boundingRect();
+
+        const float scaling = viewRectangle.height() / (extents.max.y - extents.min.y);
+		QTransform transform = currentView.pView2d->transform();
+
+        transform.setMatrix(transform.m11() * scaling,
+                            transform.m12(),
+                            transform.m13(),
+                            transform.m21(),
+                            transform.m22() * scaling,
+                            transform.m23(),
+                            transform.m31(),
+                            transform.m32(),
+                            transform.m33());
+
+		currentView.pView2d->setTransform(transform);
+
 		return 0;
 	}
 	else
 	{
 		navlib::box_t e;
 		GetViewExtents(e);
+
         if (auto cam = getCamera<SoOrthographicCamera*>())
 		{
             cam->scaleHeight((extents.max.x - extents.min.x) / (e.max.x - e.min.x));   		
@@ -373,18 +386,20 @@ long NavlibInterface::GetModelExtents(navlib::box_t &extents) const
 		SbBox3f nbbox = action.getBoundingBox();
 		std::copy(nbbox.getMin().getValue(), nbbox.getMin().getValue() + 3, &extents.min.x);
 		std::copy(nbbox.getMax().getValue(), nbbox.getMax().getValue() + 3, &extents.max.x);
+
         return 0;
 	} 
 	else if (is2DView())
 	{
-		const QRectF modelExtents = data2dMap.at(currentView.pView2d).modelExtents;
+        const QRectF sceneExtents = currentView.pView2d->scene()->itemsBoundingRect();    
 
-		extents.min.x = modelExtents.topLeft().x();
-		extents.min.y = modelExtents.topLeft().y();
-		extents.max.x = modelExtents.bottomRight().x();
-		extents.max.y = modelExtents.bottomRight().y();
-		extents.max.z = 0;
-		extents.min.z = -1;
+		extents.min.x = sceneExtents.topLeft().x();
+        extents.min.y = -sceneExtents.bottomRight().y();
+        extents.max.x = sceneExtents.bottomRight().x();
+        extents.max.y = -sceneExtents.topLeft().y();
+        extents.max.z = 0;
+        extents.min.z = -1;
+
 		return 0;
 	}
 	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
@@ -392,12 +407,6 @@ long NavlibInterface::GetModelExtents(navlib::box_t &extents) const
 
 long NavlibInterface::SetTransaction(long value)
 {
-	if(is2DView() && value==0)
-	{
-		data2dMap.at(currentView.pView2d).updateGraphics(currentView.pView2d);
-		return 0;
-	}
-	
 	if (value == 0)
 	{
 		if(auto viewer = getViewer())
@@ -447,31 +456,4 @@ bool NavlibInterface::is3DView() const
 bool NavlibInterface::is2DView() const
 {
 	return currentView.pView2d != nullptr;
-}
-
-void NavlibInterface::Navigation2D::init(QGraphicsView* view)
-{
-	modelExtents = (view->scene()->itemsBoundingRect());
-	scale = 1.0;
-	QMatrix4x4 init;
-	init.translate(modelExtents.center().x(), modelExtents.center().y(), 150);
-	data = init;
-}
-
-void NavlibInterface::Navigation2D::updateGraphics(QGraphicsView* view) const
-{
-	QPointF size(modelExtents.width(), modelExtents.height());
-	auto camToWorld = data;
-	camToWorld(0, 3) -= size.x() / 2.0;
-	camToWorld(1, 3) -= size.y() / 2.0;
-
-	auto worldToCam = camToWorld.inverted();
-	QPointF newPos(worldToCam(0, 3) * scale, -worldToCam(1, 3) * scale);
-	for (auto item : view->items())
-	{
-		item->resetTransform();
-		item->setTransformOriginPoint(item->boundingRect().center());
-		item->setScale(scale);
-		item->setPos(newPos);
-	}
 }
