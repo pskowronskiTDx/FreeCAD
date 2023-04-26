@@ -21,7 +21,7 @@
 
 __title__= "FreeCAD Arch Stairs"
 __author__ = "Yorik van Havre"
-__url__ = "https://www.freecadweb.org"
+__url__ = "https://www.freecad.org"
 
 
 import FreeCAD,ArchComponent,Draft,DraftVecUtils,math,ArchPipe
@@ -206,7 +206,7 @@ class _CommandStairs:
         return {'Pixmap'  : 'Arch_Stairs',
                 'MenuText': QT_TRANSLATE_NOOP("Arch_Stairs","Stairs"),
                 'Accel': "S, R",
-                'ToolTip': QT_TRANSLATE_NOOP("Arch_Space","Creates a stairs object")}
+                'ToolTip': QT_TRANSLATE_NOOP("Arch_Stairs","Creates a stairs object")}
 
     def IsActive(self):
 

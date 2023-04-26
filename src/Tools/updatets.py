@@ -282,13 +282,9 @@ def update_translation(entry):
             f"touch dummy_cpp_file_for_lupdate.cpp"
         )  # lupdate 5.x requires at least one source file to process the UI files
         execline.append(f"touch {tsBasename}py.ts")
-        execline.append(
-            f'{PYLUPDATE} `find ./ -name "*.py"` -ts {tsBasename}py.ts {log_redirect}'
-        )
+        execline.append(f'{PYLUPDATE} `find ./ -name "*.py"` -ts {tsBasename}py.ts {log_redirect}')
         execline.append(f"{QMAKE} -project -o {project_filename} -r")
-        execline.append(
-            f"{LUPDATE} {project_filename} -ts {tsBasename}.ts {log_redirect}"
-        )
+        execline.append(f"{LUPDATE} {project_filename} -ts {tsBasename}.ts {log_redirect}")
         execline.append(
             f"sed 's/<translation.*>.*<\/translation>/<translation type=\"unfinished\"><\/translation>/g' {tsBasename}.ts > {tsBasename}.ts.temp"
         )
@@ -365,10 +361,10 @@ def update_translation(entry):
             return
 
         with open(f"{cur}/tsupdate_stdout.log", "a", encoding="utf-8") as f:
-            f.write(p.stdout.decode())
-            print(p.stdout.decode())
+            f.write(p.stdout)
+            print(p.stdout)
         with open(f"{cur}/tsupdate_stderr.log", "a", encoding="utf-8") as f:
-            f.write(p.stderr.decode())
+            f.write(p.stderr)
 
         # Strip out obsolete strings, and make sure there are no translations in the main *.ts file
         subprocess.run(
