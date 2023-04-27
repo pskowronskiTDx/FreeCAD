@@ -2,18 +2,13 @@
 #define NAVLIB_PLUGIN_NAVLIB_INTERFACE_H
 
 #include <SpaceMouse/CNavigation3D.hpp>
-#include <memory>
+
 #include <string>
 #include <unordered_map>
-#include <Inventor/nodes/SoResetTransform.h>
-#include <Gui/ViewProvider.h>
-
-#include <QMatrix4x4>
 
 constexpr uint32_t hitTestingResolution = 30;
 
 using CNav3D = TDx::SpaceMouse::Navigation3D::CNavigation3D;
-
 class QGraphicsView;
 class QAction;
 
@@ -70,21 +65,10 @@ public:
 
 private:
 
-	void initializePivot();
-	template<class cameraOut = SoCamera*> cameraOut getCamera() const;
-    Gui::View3DInventorViewer *getViewer() const;
-    void onViewChanged(const Gui::MDIView*);
-    bool is3DView() const;
-    bool is2DView() const;
-	void exportCommands(const std::string &workbench);
-    void extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images);
-    void extractCommands(Gui::ActionGroup &actionGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category,
-                         std::vector<TDx::CImage> &images);
-
-	struct FreecadCmd 
-	{
-		FreecadCmd() = default;
-		FreecadCmd(QAction*, Gui::Command*, int param = -1);
+	struct FCCommand
+    {
+        FCCommand() = default;
+        FCCommand(QAction* const, Gui::Command* const, int parameter = -1);
         void run();
         std::string name() const;
         std::string id() const;
@@ -100,18 +84,18 @@ private:
             GROUP
         } type;
 
-		QAction *pAction;		
-		Gui::Command *pCommand;
-		int parameter;
-	};
+        QAction* pAction;
+        Gui::Command* pCommand;
+        int parameter;
+    };
 
-	struct
+    struct
     {
-        const Gui::View3DInventor *pView3d = nullptr;
-        QGraphicsView *pView2d = nullptr;
+        const Gui::View3DInventor* pView3d = nullptr;
+        QGraphicsView* pView2d = nullptr;
     } currentView;
 
-	struct
+    struct
     {
         SbVec3f origin;
         SbVec3f direction;
@@ -119,7 +103,7 @@ private:
         bool selectionOnly;
     } ray;
 
-	struct
+    struct
     {
         SoTransform* pTransform = nullptr;
         SoSwitch* pVisibility = nullptr;
@@ -130,8 +114,19 @@ private:
         QImage pivotImage;
     } pivot;
 
+	void initializePivot();
+	template<class CameraType>
+	CameraType getCamera() const;
+    void onViewChanged(const Gui::MDIView*);
+    bool is3DView() const;
+    bool is2DView() const;
+	void exportCommands(const std::string &workbench);
+    void extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images);
+    void extractCommands(const Gui::ActionGroup &actionGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category,
+                         std::vector<TDx::CImage> &images);
+
     std::pair<int, std::string> activeTab = {-1, ""};
-    std::unordered_map<std::string, std::shared_ptr<FreecadCmd>> commands;
+    std::unordered_map<std::string, std::shared_ptr<FCCommand>> commands;
     std::array<SbVec2f, hitTestingResolution> hitTestPattern;
 };
 #endif // NAVLIB_PLUGIN_NAVLIB_INTERFACE_H

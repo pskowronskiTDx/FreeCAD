@@ -11,7 +11,6 @@
 #include <Gui/Application.h>
 #include <Gui/WorkbenchManager.h>
 #include <Gui/MainWindow.h>
-
 #include <Gui/Command.h>
 #include <Gui/Workbench.h>
 
@@ -23,135 +22,177 @@ using TDx::SpaceMouse::CCategory;
 using TDx::SpaceMouse::CCommand;
 using TDx::SpaceMouse::CCommandSet;
 
-NavlibInterface::FreecadCmd::FreecadCmd(QAction *action, Gui::Command *cmd, int param): 
-										pAction(action), pCommand(cmd), parameter(param){
-	type= Type::NONE;
-	if (cmd->getAction() != nullptr){
-		if(action->isCheckable()){
-			type= Type::CHECKABLE;
-		} 
-		if(auto pcAction = qobject_cast<Gui::ActionGroup*>(pCommand->getAction())){
-			if(pcAction->actions().size()==1){
-				//Group can be checkable too
-				type= Type::CHECKABLE;
-			}else{
-				type= Type::GROUP;
-			}
-		}
-	}
+NavlibInterface::FCCommand::FCCommand(
+	QAction* const pAction_,
+	Gui::Command* const pCommand_,
+	int parameter_)
+    : pAction(pAction_),
+      pCommand(pCommand_),
+      parameter(parameter_)
+{
+    type = Type::NONE;
+
+    if (pCommand->getAction() != nullptr) {
+
+        if (pAction->isCheckable()) {
+            type = Type::CHECKABLE;
+        }
+
+        const auto pActionGroup = qobject_cast<Gui::ActionGroup*>(pCommand->getAction());
+
+        if (pActionGroup != nullptr) {
+
+            if (pActionGroup->actions().size() == 1) {
+                type = Type::CHECKABLE;
+            }
+            else {
+                type = Type::GROUP;
+            }
+        }
+    }
 }
 
-void NavlibInterface::FreecadCmd::run(){
-	switch(type){
-		case FreecadCmd::Type::NONE:
-			Gui::Application::Instance->commandManager().runCommandByName(pCommand->getName());
-			break;
-		case FreecadCmd::Type::CHECKABLE:
-			pAction->toggle();
-			break;
-		case FreecadCmd::Type::GROUP:
-			pCommand->invoke(parameter);
-			break;
-	}
+void NavlibInterface::FCCommand::run()
+{
+    switch (type) {
+        case FCCommand::Type::NONE:
+            Gui::Application::Instance->commandManager().runCommandByName(pCommand->getName());
+            break;
+        case FCCommand::Type::CHECKABLE:
+            pAction->toggle();
+            break;
+        case FCCommand::Type::GROUP:
+            pCommand->invoke(parameter);
+            break;
+    }
 }
 
-std::string NavlibInterface::FreecadCmd::id()const{
-	if(type == FreecadCmd::Type::GROUP){
-		return std::string(pCommand->getName())+"_"+pAction->text().toStdString();
-	}else{
-		return pCommand->getName();
-	}
+std::string NavlibInterface::FCCommand::id() const
+{
+    if (type == FCCommand::Type::GROUP) {
+        return std::string(pCommand->getName()) + "_" + pAction->text().toStdString();
+    }
+    else {
+        return pCommand->getName();
+    }
 }
 
-std::string NavlibInterface::FreecadCmd::name()const{
-	if(type == FreecadCmd::Type::GROUP){
-		return pAction->text().toStdString();
-	}else{
-		std::string str(pCommand->getMenuText());
-		str.erase(std::remove(str.begin(), str.end(), '&'), str.end());
-		return str;
-	}
+std::string NavlibInterface::FCCommand::name() const
+{
+    if (type == FCCommand::Type::GROUP) {
+        return pAction->text().toStdString();
+    }
+    else {
+        std::string name(pCommand->getMenuText());
+        name.erase(std::remove(name.begin(), name.end(), '&'), name.end());
+        return name;
+    }
 }
 
-std::string NavlibInterface::FreecadCmd::description()const{
-	if(type == FreecadCmd::Type::GROUP){
-		return pAction->toolTip().toStdString();
-	}else{
-		return pCommand->getToolTipText();
-	}
+std::string NavlibInterface::FCCommand::description() const
+{
+    if (type == FCCommand::Type::GROUP) {
+        return pAction->toolTip().toStdString();
+    }
+    else {
+        return pCommand->getToolTipText();
+    }
 }
 
 #ifdef WIN32
-TDx::CImage NavlibInterface::FreecadCmd::extractImage()const{
-	QIcon iconImg = pAction->icon();
-	QImage qimage = iconImg.pixmap(QSize(256, 256)).toImage();
-	QByteArray qbyteArray;
-	QBuffer qbuffer(&qbyteArray);
-	qimage.save(&qbuffer, "PNG"); // writes the image in PNG format inside the buffer
-	QString iconBase64 = QString::fromLatin1(qbyteArray.toBase64().data());
-	return TDx::CImage::FromData(qbyteArray.toStdString(), 0, id().c_str());
+TDx::CImage NavlibInterface::FCCommand::extractImage() const
+{
+    const QIcon iconImg = pAction->icon();
+    const QImage qimage = iconImg.pixmap(QSize(256, 256)).toImage();
+    QByteArray qbyteArray;
+    QBuffer qbuffer(&qbyteArray);
+    qimage.save(&qbuffer, "PNG");
+
+    return TDx::CImage::FromData(qbyteArray.toStdString(), 0, id().c_str());
 }
 #endif
 
-TDx::SpaceMouse::CCommand NavlibInterface::FreecadCmd::toCCommand()const{
+TDx::SpaceMouse::CCommand NavlibInterface::FCCommand::toCCommand()const{
 	return CCommand(id(), name(), description());
 }
 
 long NavlibInterface::SetActiveCommand(std::string commandId)
 {
-	if(commandId != ""){
-		commands[commandId]->run();
-	}
-	return 0;
+    if (commandId != "") {
+        commands.at(commandId)->run();
+    }
+    return 0;
 }
 
-void NavlibInterface::extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images){
-	if(auto actionsGroup = qobject_cast<Gui::ActionGroup*>(command.getAction())){
-		if(actionsGroup->actions().size() > 1){
-			return extractCommands(*actionsGroup, command, category, images);
-		}
-	}
-	if(command.getAction() == nullptr){
-		return;
-	}
-		
-	auto commandId = command.getName();
+void NavlibInterface::extractCommand(Gui::Command& command,
+                                     TDx::SpaceMouse::CCategory& category,
+                                     std::vector<TDx::CImage>& images)
+{
 
-	if(commands.find(commandId)== commands.end()){
-		commands[commandId]=std::make_shared<FreecadCmd>(command.getAction()->action(), &command);
-	}
-	auto localCommand=commands[commandId];
-
-	if (localCommand->toCCommand().Label == "")
+	if (command.getAction() == nullptr) {
         return;
+    }
 
-	category.push_back(localCommand->toCCommand());
-#ifdef WIN32	
-	if(!command.getAction()->icon().isNull()){
-		images.push_back(localCommand->extractImage());
-	}
+	auto actionsGroup = qobject_cast<Gui::ActionGroup*>(command.getAction());
+
+    if (actionsGroup != nullptr) {
+        if (actionsGroup->actions().size() > 1) {
+            return extractCommands(*actionsGroup, command, category, images);
+        }
+    }
+
+    const char *commandId = command.getName();
+
+    if (commands.find(commandId) == commands.end()) {
+        commands.insert({commandId, std::make_shared<FCCommand>(command.getAction()->action(), &command)});
+    }
+
+	if (commands.at(commandId)->toCCommand().Label == "") {
+        return;
+    }
+
+    category.push_back(commands.at(commandId)->toCCommand());
+
+#ifdef WIN32
+    if (!command.getAction()->icon().isNull()) {
+        images.push_back(commands.at(commandId)->extractImage());
+    }
 #endif
+
+    return;
 }
 
-void NavlibInterface::extractCommands(Gui::ActionGroup &actionsGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images){
-	int index = 0;
-	for(auto action : actionsGroup.actions()){
-		if(action->isSeparator()){
-			continue;
-		}
-		auto commandId= std::string(command.getName())+"_"+action->text().toStdString();
-		auto localCommand = commands[commandId]=std::make_shared<FreecadCmd>(action, &command, index++);
+void NavlibInterface::extractCommands(const Gui::ActionGroup& actionsGroup,
+	                                  Gui::Command& command,
+                                      TDx::SpaceMouse::CCategory& category,
+                                      std::vector<TDx::CImage>& images)
+{
 
-		if (localCommand->toCCommand().Label == "")
+    uint32_t index = 0;
+
+    for (QAction* pAction : actionsGroup.actions()) {
+
+        if (pAction->isSeparator()) {
+            continue;
+        }
+
+        std::string commandId =
+            std::string(command.getName()) + "_" + pAction->text().toStdString();
+
+        commands.insert({commandId, std::make_shared<FCCommand>(pAction, &command, index++)});
+
+        if (commands.at(commandId)->toCCommand().Label == "") {
             return;
+        }
 
-		category.push_back(localCommand->toCCommand());
-#ifdef WIN32			
-		if(!action->icon().isNull()){
-			images.push_back(localCommand->extractImage());
-		}
+        category.push_back(commands.at(commandId)->toCCommand());
+
+#ifdef WIN32
+        if (!pAction->icon().isNull()) {
+            images.push_back(commands.at(commandId)->extractImage());
+        }
 #endif
-	}
+    }
 }
 
 void NavlibInterface::exportCommands(const std::string &workbench)
@@ -159,11 +200,12 @@ void NavlibInterface::exportCommands(const std::string &workbench)
     static const std::string substring("Workbench");
 	static const std::string noneWorkbench("NoneWorkbench");
 
-    if (workbench == noneWorkbench)
+	if (workbench == noneWorkbench) {
         return;
+	}
 
     std::string shortName(workbench);
-    auto index = shortName.find(substring);
+    uint32_t index = shortName.find(substring);
 
     if (index != std::string::npos) {
         shortName.erase(index, substring.size());
@@ -180,12 +222,13 @@ void NavlibInterface::exportCommands(const std::string &workbench)
 
     std::vector<TDx::CImage> images;
 
-    for (auto &command : workbenchCommands) {
+    for (Gui::Command *command : workbenchCommands) {
 
-		std::string groupName(command->getGroupName());
-		
-        if ((groupName == "<string>") || (groupName.empty()))
+        std::string groupName(command->getGroupName());
+
+        if ((groupName == "<string>") || (groupName.empty())) {
             groupName = "Others";
+        }
 
         CCategory category(groupName, groupName);
         extractCommand(*command, category, images);
