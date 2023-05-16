@@ -121,9 +121,9 @@ private:
     bool is3DView() const;
     bool is2DView() const;
 	void exportCommands(const std::string &workbench);
-    void extractCommand(Gui::Command &command, TDx::SpaceMouse::CCategory &category, std::vector<TDx::CImage> &images);
-    void extractCommands(const Gui::ActionGroup &actionGroup, Gui::Command &command, TDx::SpaceMouse::CCategory &category,
-                         std::vector<TDx::CImage> &images);
+    void unpackCommands(Gui::Command &command,
+		                TDx::SpaceMouse::CCategory &category,
+		                std::vector<TDx::CImage> &images);
 
     std::pair<int, std::string> activeTab = {-1, ""};
     std::unordered_map<std::string, std::shared_ptr<FCCommand>> commands;

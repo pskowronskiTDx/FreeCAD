@@ -69,11 +69,16 @@ void NavlibInterface::FCCommand::run()
 
 std::string NavlibInterface::FCCommand::id() const
 {
+    if (pAction->icon().isNull())
+        return "NULL";
+    
+	std::string name = pAction->text().toStdString();
+
     if (type == FCCommand::Type::GROUP) {
-        return std::string(pCommand->getName()) + "_" + pAction->text().toStdString();
+        return std::string(pCommand->getGroupName()) + "_" + name;
     }
     else {
-        return pCommand->getName();
+        return name;
     }
 }
 
@@ -124,7 +129,7 @@ long NavlibInterface::SetActiveCommand(std::string commandId)
     return 0;
 }
 
-void NavlibInterface::extractCommand(Gui::Command& command,
+void NavlibInterface::unpackCommands(Gui::Command& command,
                                      TDx::SpaceMouse::CCategory& category,
                                      std::vector<TDx::CImage>& images)
 {
@@ -133,66 +138,42 @@ void NavlibInterface::extractCommand(Gui::Command& command,
         return;
     }
 
-	auto actionsGroup = qobject_cast<Gui::ActionGroup*>(command.getAction());
+	auto actionGroup = qobject_cast<Gui::ActionGroup*>(command.getAction());
+    QList<QAction*> pActions;
 
-    if (actionsGroup != nullptr) {
-        if (actionsGroup->actions().size() > 1) {
-            return extractCommands(*actionsGroup, command, category, images);
+    if (actionGroup != nullptr) {
+        if (actionGroup->actions().size() > 1) {
+            pActions = actionGroup->actions();
         }
     }
+	else {
+        pActions.push_back(command.getAction()->action());
+	}
 
-    const char *commandId = command.getName();
+	uint32_t index = 0;
 
-    if (commands.find(commandId) == commands.end()) {
-        commands.insert({commandId, std::make_shared<FCCommand>(command.getAction()->action(), &command)});
-    }
+	for (QAction *pAction : pActions) {
 
-	if (commands.at(commandId)->toCCommand().Label == "") {
-        return;
-    }
-
-    category.push_back(commands.at(commandId)->toCCommand());
-
-#ifdef WIN32
-    if (!command.getAction()->icon().isNull()) {
-        images.push_back(commands.at(commandId)->extractImage());
-    }
-#endif
-
-    return;
-}
-
-void NavlibInterface::extractCommands(const Gui::ActionGroup& actionsGroup,
-	                                  Gui::Command& command,
-                                      TDx::SpaceMouse::CCategory& category,
-                                      std::vector<TDx::CImage>& images)
-{
-
-    uint32_t index = 0;
-
-    for (QAction* pAction : actionsGroup.actions()) {
-
-        if (pAction->isSeparator()) {
+		if (pAction->isSeparator()) {
             continue;
         }
 
-        std::string commandId =
-            std::string(command.getName()) + "_" + pAction->text().toStdString();
+		std::shared_ptr<FCCommand> pFCCommand = std::make_shared<FCCommand>(pAction, &command, index++);
 
-        commands.insert({commandId, std::make_shared<FCCommand>(pAction, &command, index++)});
+		if (pFCCommand->id() == "") {
+            continue;
+		}
 
-        if (commands.at(commandId)->toCCommand().Label == "") {
-            return;
-        }
-
-        category.push_back(commands.at(commandId)->toCCommand());
-
+        commands.insert({pFCCommand->id(), pFCCommand});   
+		category.push_back(pFCCommand->toCCommand());
+		
 #ifdef WIN32
         if (!pAction->icon().isNull()) {
-            images.push_back(commands.at(commandId)->extractImage());
+            images.push_back(pFCCommand->extractImage());
         }
 #endif
-    }
+	}
+    return;
 }
 
 void NavlibInterface::exportCommands(const std::string &workbench)
@@ -231,7 +212,7 @@ void NavlibInterface::exportCommands(const std::string &workbench)
         }
 
         CCategory category(groupName, groupName);
-        extractCommand(*command, category, images);
+        unpackCommands(*command, category, images);
         commandsSet.push_back(std::move(category));
     }
 
