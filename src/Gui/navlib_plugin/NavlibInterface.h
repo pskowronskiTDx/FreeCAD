@@ -30,6 +30,9 @@ public:
 	NavlibInterface();
 	~NavlibInterface();
 	void enableNavigation();
+    void disableNavigation();
+
+private:
 
 	long IsUserPivot(navlib::bool_t&) const override;
 	long GetCameraMatrix(navlib::matrix_t&) const override;
@@ -62,8 +65,6 @@ public:
 	long SetHitSelectionOnly(bool) override;
 	long SetActiveCommand(std::string) override;
 	long SetTransaction(long) override;
-
-private:
 
 	struct FCCommand
     {
@@ -120,13 +121,15 @@ private:
     void onViewChanged(const Gui::MDIView*);
     bool is3DView() const;
     bool is2DView() const;
-	void exportCommands(const std::string &workbench);
-    void unpackCommands(Gui::Command &command,
-		                TDx::SpaceMouse::CCategory &category,
-		                std::vector<TDx::CImage> &images);
+    void exportCommands(const std::string& workbench);
+    void unpackCommands(Gui::Command& command,
+		                TDx::SpaceMouse::CCategory& category,
+		                std::vector<TDx::CImage>& images);
 
+	std::error_code errorCode;
     std::pair<int, std::string> activeTab = {-1, ""};
     std::unordered_map<std::string, std::shared_ptr<FCCommand>> commands;
     std::array<SbVec2f, hitTestingResolution> hitTestPattern;
+
 };
 #endif // NAVLIB_PLUGIN_NAVLIB_INTERFACE_H

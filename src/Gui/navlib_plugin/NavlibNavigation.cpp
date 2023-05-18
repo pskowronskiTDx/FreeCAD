@@ -142,7 +142,13 @@ NavlibInterface::NavlibInterface()
 void NavlibInterface::enableNavigation()
 {
     PutProfileHint("FreeCAD");
-    CNav3D::EnableNavigation(true);
+
+    CNav3D::EnableNavigation(true, errorCode);
+
+	if (errorCode) {
+        return;
+	}
+
     PutFrameTimingSource(TimingSource::SpaceMouse);
     Write(navlib::active_k, true);
 
@@ -169,9 +175,16 @@ void NavlibInterface::enableNavigation()
     initializePivot();
 }
 
+void NavlibInterface::disableNavigation()
+{
+    CNav3D::EnableNavigation(false, errorCode);
+    return;
+}
+
 NavlibInterface::~NavlibInterface()
 {
-	CNav3D::EnableNavigation(false);
+    disableNavigation();
+
 	if (pivot.pVisibility != nullptr) {
         pivot.pVisibility->unref();
 	}

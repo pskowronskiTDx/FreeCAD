@@ -69,10 +69,11 @@ void NavlibInterface::FCCommand::run()
 
 std::string NavlibInterface::FCCommand::id() const
 {
-    if (pAction->icon().isNull())
+    if (pAction->icon().isNull()) {
         return "NULL";
-    
-	std::string name = pAction->text().toStdString();
+    }
+
+    std::string name = pAction->text().toStdString();
 
     if (type == FCCommand::Type::GROUP) {
         return std::string(pCommand->getGroupName()) + "_" + name;
@@ -178,6 +179,10 @@ void NavlibInterface::unpackCommands(Gui::Command& command,
 
 void NavlibInterface::exportCommands(const std::string &workbench)
 {
+    if (errorCode) {
+        return;
+    }
+
     static const std::string substring("Workbench");
 	static const std::string noneWorkbench("NoneWorkbench");
 

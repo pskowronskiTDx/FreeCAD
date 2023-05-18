@@ -136,7 +136,7 @@ namespace sp = std::placeholders;
 
 Application* Application::Instance = nullptr;
 #ifdef USE_3DCONNEXION_SDK
-NavlibInterface* navlibInt=nullptr;
+NavlibInterface* navlibInterface = nullptr;
 #endif
 namespace Gui {
 
@@ -530,7 +530,7 @@ Application::Application(bool GUIenabled)
     // instantiate the workbench dictionary
     _pcWorkbenchDictionary = PyDict_New();
     #ifdef USE_3DCONNEXION_SDK
-    navlibInt = new NavlibInterface();
+    navlibInterface = new NavlibInterface();
     #endif
     if (GUIenabled) {
         createStandardOperations();
@@ -541,7 +541,7 @@ Application::Application(bool GUIenabled)
 Application::~Application()
 {
     #ifdef USE_3DCONNEXION_SDK
-   	delete navlibInt;
+    delete navlibInterface;
     #endif
     Base::Console().Log("Destruct Gui::Application\n");
     WorkbenchManager::destruct();
@@ -2254,7 +2254,7 @@ void Application::runApplication()
     mw.stopSplasher();
     mainApp.setActiveWindow(&mw);
     #ifdef USE_3DCONNEXION_SDK
-    navlibInt->enableNavigation();
+    navlibInterface->enableNavigation();
     #endif
     // Activate the correct workbench
     std::string start = App::Application::Config()["StartWorkbench"];

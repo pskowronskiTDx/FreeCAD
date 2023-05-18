@@ -51,6 +51,10 @@ long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
 
 long NavlibInterface::SetPivotPosition(const navlib::point_t &position)
 {  
+	if (pivot.pTransform == nullptr) {
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+	}
+
     pivot.pTransform->translation.setValue(position.x, position.y, position.z);
     return 0;
 }
@@ -63,12 +67,20 @@ long NavlibInterface::IsUserPivot(navlib::bool_t &userPivot) const
 
 long NavlibInterface::GetPivotVisible(navlib::bool_t &visible) const
 { 
+	if (pivot.pVisibility == nullptr) {
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    }
+
     visible = pivot.pVisibility->whichChild.getValue() == SO_SWITCH_ALL;
     return 0;
 }
 
 long NavlibInterface::SetPivotVisible(bool visible)
 { 
+	if (pivot.pVisibility == nullptr) {
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    }
+
     if (visible) {
         pivot.pVisibility->whichChild = SO_SWITCH_ALL;
     }
@@ -148,6 +160,8 @@ long NavlibInterface::GetSelectionExtents(navlib::box_t &extents) const
                       }
 
                       boundingBox.Add(pViewProvider->getBoundingBox(selection.SubName, true));
+
+					  return 0l;
                   });
 
 	extents = {boundingBox.MinX,

@@ -12,16 +12,20 @@ IF(CMAKE_BUILD_TYPE)
 ENDIF(CMAKE_BUILD_TYPE)
 
 if (FREECAD_USE_3DCONNEXION)
-    add_definitions(-DUSE_3DCONNEXION_SDK)
-    if(WIN32)
-        find_package(TDxWare_SDK 4.0 REQUIRED COMPONENTS 3DxWare::Navlib)
-        set(3DCONNEXION_INCLUDE_DIR "navlib_plugin/NavlibInterface.h")
-    endif(WIN32)
-    if(APPLE)
-        set(3DCONNEXION_LINKFLAGS "-F/Library/Frameworks -weak_framework 3DconnexionClient")
-        set(3DCONNEXION_INCLUDE_DIR ${3DCONNEXIONCLIENT_FRAMEWORK}/Headers
-                                    ${3DCONNEXIONCLIENT_FRAMEWORK}/Headers/3DconnexionClient )
-    endif(APPLE)
+
+	find_package(TDxWare_SDK 4.0 COMPONENTS 3DxWare::headers)
+
+	if(TDxWare_SDK_FOUND AND (MSVC OR APPLE))
+		add_definitions(-DUSE_3DCONNEXION_SDK)
+		include_directories($<TARGET_PROPERTY:3DxWare::headers,INTERFACE_INCLUDE_DIRECTORIES>)
+		set(3DCONNEXION_INCLUDE_DIR "navlib_plugin/NavlibInterface.h")
+		if(APPLE)
+			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdeclspec")
+		endif()
+	elseif(SPNAV_FOUND AND (UNIX AND NOT APPLE))
+		set(LINUX_3DCONNEXION TRUE)
+	endif()
+
 endif(FREECAD_USE_3DCONNEXION)
 
 if (BUILD_VR)
@@ -66,7 +70,7 @@ if(MSVC)
          ${OPENGL_gl_LIBRARY}
     )
 
-    if(FREECAD_USE_3DCONNEXION)
+    if(TDxWare_SDK_FOUND AND (MSVC OR APPLE))
         list(APPEND FreeCADGui_LIBS
             $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_LINK_LIBRARIES>
         )
@@ -81,6 +85,42 @@ else(MSVC)
         ${3DCONNEXION_LINKFLAGS}
     )
 endif(MSVC)
+
+if(LINUX_3DCONNEXION)
+	if(SPNAV_USE_X11)
+		add_definitions(-DSPNAV_USE_X11)
+		if (FREECAD_QT_MAJOR_VERSION EQUAL 5 AND UNIX AND NOT APPLE)
+			find_package(Qt5X11Extras REQUIRED)
+			include_directories(${Qt5X11Extras_INCLUDE_DIRS})
+			list(APPEND FreeCADGui_LIBS ${Qt5X11Extras_LIBRARIES})
+			# Note that Qt6 has removed the QtX11Extras files
+		endif()
+		find_package(X11 QUIET)
+		if (X11_FOUND)
+			list(APPEND FreeCADGui_LIBS ${X11_X11_LIB})
+		endif(X11_FOUND)
+		SET(FreeCADGui_SDK_SRCS
+			3Dconnexion/GuiAbstractNativeEvent.cpp
+			3Dconnexion/GuiNativeEventLinuxX11.cpp)
+		SET(FreeCADGui_SDK_MOC_HDRS
+			3Dconnexion/GuiAbstractNativeEvent.h
+			3Dconnexion/GuiNativeEventLinuxX11.h)
+	else(SPNAV_USE_X11)
+		SET(FreeCADGui_SDK_SRCS
+			3Dconnexion/GuiAbstractNativeEvent.cpp
+			3Dconnexion/GuiNativeEventLinux.cpp)
+		SET(FreeCADGui_SDK_MOC_HDRS
+			3Dconnexion/GuiAbstractNativeEvent.h
+			3Dconnexion/GuiNativeEventLinux.h)
+	endif(SPNAV_USE_X11)
+	SOURCE_GROUP("3D connexion SDK" FILES ${FreeCADGui_SDK_SRCS})
+
+	add_definitions(-DSPNAV_FOUND)
+	include_directories(${SPNAV_INCLUDE_DIR})
+	list(APPEND FreeCADGui_LIBS ${SPNAV_LIBRARIES})
+
+endif(LINUX_3DCONNEXION)
+
 
 if (QtWebEngineWidgets_FOUND AND BUILD_WITH_CONDA)
         add_definitions(-DQTWEBENGINE)
@@ -115,51 +155,7 @@ if (QtWebEngineWidgets_FOUND AND BUILD_WITH_CONDA)
         ${Qt5WinExtras_LIBRARIES}
       )
     endif()
-	#[[
-IF(SPNAV_FOUND)
-    if(SPNAV_USE_X11)
-      add_definitions(-DSPNAV_USE_X11)
-        if (FREECAD_QT_MAJOR_VERSION EQUAL 5 AND UNIX AND NOT APPLE)
-        find_package(Qt5X11Extras REQUIRED)
-        include_directories(${Qt5X11Extras_INCLUDE_DIRS})
-        list(APPEND FreeCADGui_LIBS ${Qt5X11Extras_LIBRARIES})
-            # Note that Qt6 has removed the QtX11Extras files
-      endif()
-      find_package(X11 QUIET)
-      if (X11_FOUND)
-        list(APPEND FreeCADGui_LIBS
-            ${X11_X11_LIB}
-        )
-      endif(X11_FOUND)
-      SET(FreeCADGui_SDK_SRCS
-        3Dconnexion/GuiAbstractNativeEvent.cpp
-        3Dconnexion/GuiNativeEventLinuxX11.cpp
-        )
-      SET(FreeCADGui_SDK_MOC_HDRS
-        3Dconnexion/GuiAbstractNativeEvent.h
-        3Dconnexion/GuiNativeEventLinuxX11.h
-        )
-    else(SPNAV_USE_X11)
-      SET(FreeCADGui_SDK_SRCS
-        3Dconnexion/GuiAbstractNativeEvent.cpp
-        3Dconnexion/GuiNativeEventLinux.cpp
-      )
-      SET(FreeCADGui_SDK_MOC_HDRS
-        3Dconnexion/GuiAbstractNativeEvent.h
-        3Dconnexion/GuiNativeEventLinux.h
-      )
-    endif(SPNAV_USE_X11)
-    SOURCE_GROUP("3D connexion SDK" FILES ${FreeCADGui_SDK_SRCS})
 
-    add_definitions(-DSPNAV_FOUND)
-    include_directories(
-        ${SPNAV_INCLUDE_DIR}
-    )
-    list(APPEND FreeCADGui_LIBS
-        ${SPNAV_LIBRARIES}
-    )
-ENDIF(SPNAV_FOUND)
-]]
 IF(OCULUS_FOUND)
     add_definitions(-DOCULUS_FOUND)
     include_directories(
@@ -250,17 +246,19 @@ SET(FreeCADGui_XML_SRCS
 SOURCE_GROUP("XML" FILES ${FreeCADApp_XML_SRCS})
 
 # The 3D Connexion SDK files
-if(FREECAD_USE_3DCONNEXION AND(APPLE OR MSVC)) 
+if(TDxWare_SDK_FOUND AND (MSVC OR APPLE)) 
     SET(FreeCADGui_SDK_SRCS
         navlib_plugin/NavlibCmds.cpp
         navlib_plugin/NavlibNavigation.cpp
         navlib_plugin/NavlibPivot.cpp
+		navlib_plugin/navlib_load.cpp
+		navlib_plugin/navlib_stub.c
     )
-    SOURCE_GROUP("official 3Dconnexion SDK" FILES ${FreeCADGui_SDK_SRCS})
+    SOURCE_GROUP("NavLib" FILES ${FreeCADGui_SDK_SRCS})
 	SET(FreeCADGui_SDK_MOC_HDRS
 		navlib_plugin/NavlibInterface.h
 	)
-endif(FREECAD_USE_3DCONNEXION AND(APPLE OR MSVC))
+endif(TDxWare_SDK_FOUND AND (MSVC OR APPLE))
 
 
     set_property(SOURCE GraphvizView.h GraphvizView.cpp PROPERTY SKIP_AUTOMOC ON)
@@ -1165,7 +1163,6 @@ SET(FreeCADGui_SRCS
     GraphicsViewZoom.h
     GuiApplication.h
     GuiApplicationNativeEventAware.h
-    #3Dconnexion/GuiAbstractNativeEvent.h
     GuiConsole.h
     InventorAll.h
     Macro.h
@@ -1187,6 +1184,10 @@ SET(FreeCADGui_SRCS
     UserSettings.h
     ${FreeCADGui_SDK_MOC_HDRS}
 )
+
+if(SPNAV_FOUND AND (UNIX AND NOT APPLE))
+	list(APPEND FreeCADGui_SRCS 3Dconnexion/GuiAbstractNativeEvent.h)
+endif(SPNAV_FOUND AND (UNIX AND NOT APPLE))
 
 SET(FreeCADGui_SRCS
     ${FreeCADGui_SDK_SRCS}
@@ -1273,22 +1274,7 @@ if (EIGEN3_NO_DEPRECATED_COPY)
 endif ()
 
 add_library(FreeCADGui SHARED ${FreeCADGui_SRCS})
-
-if (FREECAD_USE_3DCONNEXION AND (MSVC OR APPLE))
-    target_compile_definitions(FreeCADGui PRIVATE -DUSE_3DCONNEXION)
-    target_compile_definitions(FreeCADGui PRIVATE
-        $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_COMPILE_DEFINITIONS>
-    )
-    target_include_directories(FreeCADGui PRIVATE 
-        $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_INCLUDE_DIRECTORIES>
-    )
-
-    target_compile_options(FreeCADGui PRIVATE
-        $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_COMPILE_OPTIONS>
-    )
-    target_link_libraries(FreeCADGui ${FreeCADGui_LIBS} $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_LINK_LIBRARIES>)
-endif(FREECAD_USE_3DCONNEXION AND (MSVC OR APPLE))
-
+target_link_libraries(FreeCADGui ${FreeCADGui_LIBS})
 
 SET_BIN_DIR(FreeCADGui FreeCADGui)
 
