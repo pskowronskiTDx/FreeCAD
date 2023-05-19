@@ -69,13 +69,6 @@ if(MSVC)
          ${COIN3D_LIBRARIES}
          ${OPENGL_gl_LIBRARY}
     )
-
-    if(TDxWare_SDK_FOUND AND (MSVC OR APPLE))
-        list(APPEND FreeCADGui_LIBS
-            $<TARGET_PROPERTY:3DxWare::Navlib,INTERFACE_LINK_LIBRARIES>
-        )
-    endif()
-
 else(MSVC)
     set(FreeCADGui_LIBS
         FreeCADApp
