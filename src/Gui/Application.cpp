@@ -124,9 +124,7 @@
 #include "WorkbenchManager.h"
 #include "WidgetFactory.h"
 
-#ifdef USE_3DCONNEXION_SDK
 #include "navlib_plugin/NavlibInterface.h"
-#endif
 
 using namespace Gui;
 using namespace Gui::DockWnd;
@@ -135,9 +133,7 @@ namespace sp = std::placeholders;
 
 
 Application* Application::Instance = nullptr;
-#ifdef USE_3DCONNEXION_SDK
-NavlibInterface* navlibInterface = nullptr;
-#endif
+
 namespace Gui {
 
 class ViewProviderMap {
@@ -529,9 +525,12 @@ Application::Application(bool GUIenabled)
 
     // instantiate the workbench dictionary
     _pcWorkbenchDictionary = PyDict_New();
-    #ifdef USE_3DCONNEXION_SDK
-    navlibInterface = new NavlibInterface();
-    #endif
+
+#ifdef USE_3DCONNEXION_NAVLIB
+	// Instantiate the 3DConnexion controller
+	pNavlibInterface = new NavlibInterface();
+#endif
+
     if (GUIenabled) {
         createStandardOperations();
         MacroCommand::load();
@@ -540,9 +539,10 @@ Application::Application(bool GUIenabled)
 
 Application::~Application()
 {
-    #ifdef USE_3DCONNEXION_SDK
-    delete navlibInterface;
-    #endif
+#ifdef USE_3DCONNEXION_NAVLIB
+    delete pNavlibInterface;
+#endif
+
     Base::Console().Log("Destruct Gui::Application\n");
     WorkbenchManager::destruct();
     SelectionSingleton::destruct();
@@ -2254,9 +2254,11 @@ void Application::runApplication()
     // for scripts using Python binding for Qt
     mw.stopSplasher();
     mainApp.setActiveWindow(&mw);
-    #ifdef USE_3DCONNEXION_SDK
-    navlibInterface->enableNavigation();
-    #endif
+
+#ifdef USE_3DCONNEXION_NAVLIB
+    Instance->pNavlibInterface->enableNavigation();
+#endif
+
     // Activate the correct workbench
     std::string start = App::Application::Config()["StartWorkbench"];
     Base::Console().Log("Init: Activating default workbench %s\n", start.c_str());

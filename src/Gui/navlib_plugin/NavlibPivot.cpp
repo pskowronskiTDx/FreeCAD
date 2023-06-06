@@ -1,195 +1,199 @@
 #include <PreCompiled.h>
 
-#include<QImage>
-#include<QString>
-#include<QWindow>
-#include<QScreen>
+#include <QImage>
+#include <QScreen>
+#include <QString>
+#include <QWindow>
 
 #include "NavlibInterface.h"
-#include <Inventor/SoRenderManager.h>
 #include <Inventor/SbMatrix.h>
-#include <Inventor/fields/SoSFVec3f.h>
 #include <Inventor/SbViewVolume.h>
 #include <Inventor/SoPickedPoint.h>
-#include <Inventor/nodes/SoSeparator.h>
-#include <Inventor/nodes/SoTransform.h>
-#include <Inventor/nodes/SoResetTransform.h>
-#include <Inventor/nodes/SoImage.h>
-#include <Inventor/nodes/SoSwitch.h>
-#include <Inventor/nodes/SoDepthBuffer.h>
+#include <Inventor/SoRenderManager.h>
+#include <Inventor/fields/SoSFVec3f.h>
 #include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoDepthBuffer.h>
+#include <Inventor/nodes/SoImage.h>
+#include <Inventor/nodes/SoResetTransform.h>
+#include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoSwitch.h>
+#include <Inventor/nodes/SoTransform.h>
 
 #include <Gui/Application.h>
-#include <Gui/Selection.h>
-#include <Gui/ViewProvider.h>
 #include <Gui/BitmapFactory.h>
+#include <Gui/Selection.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
+#include <Gui/ViewProvider.h>
 
 constexpr float MAX_FLOAT = std::numeric_limits<float>::max();
 
-long NavlibInterface::GetSelectionTransform(navlib::matrix_t &) const
+long NavlibInterface::GetSelectionTransform(navlib::matrix_t&) const
 {
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetIsSelectionEmpty(navlib::bool_t &empty) const
+long NavlibInterface::GetIsSelectionEmpty(navlib::bool_t& empty) const
 {
-	empty = (Gui::SelectionSingleton::instance().hasSelection() ? 0 : 1);
-	return 0;
+    empty = !Gui::SelectionSingleton::instance().hasSelection();
+    return 0;
 }
 
-long NavlibInterface::SetSelectionTransform(const navlib::matrix_t &)
+long NavlibInterface::SetSelectionTransform(const navlib::matrix_t&)
 {
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetPivotPosition(navlib::point_t &position) const
-{ 
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+long NavlibInterface::GetPivotPosition(navlib::point_t& position) const
+{
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::SetPivotPosition(const navlib::point_t &position)
-{  
-	if (pivot.pTransform == nullptr) {
+long NavlibInterface::SetPivotPosition(const navlib::point_t& position)
+{
+    if (pivot.pTransform == nullptr)
         return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-	}
 
     pivot.pTransform->translation.setValue(position.x, position.y, position.z);
     return 0;
 }
 
-long NavlibInterface::IsUserPivot(navlib::bool_t &userPivot) const
+long NavlibInterface::IsUserPivot(navlib::bool_t& userPivot) const
 {
-	userPivot = false;
-	return 0;
+    userPivot = false;
+    return 0;
 }
 
-long NavlibInterface::GetPivotVisible(navlib::bool_t &visible) const
-{ 
-	if (pivot.pVisibility == nullptr) {
+long NavlibInterface::GetPivotVisible(navlib::bool_t& visible) const
+{
+    if (pivot.pVisibility == nullptr)
         return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-    }
 
     visible = pivot.pVisibility->whichChild.getValue() == SO_SWITCH_ALL;
+
     return 0;
 }
 
 long NavlibInterface::SetPivotVisible(bool visible)
-{ 
-	if (pivot.pVisibility == nullptr) {
+{
+    if (pivot.pVisibility == nullptr)
         return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-    }
 
-    if (visible) {
+    if (visible)
         pivot.pVisibility->whichChild = SO_SWITCH_ALL;
-    }
-    else {
+    else
         pivot.pVisibility->whichChild = SO_SWITCH_NONE;
-    }
+
     return 0;
 }
 
 long NavlibInterface::GetHitLookAt(navlib::point_t& position) const
 {
+    if (is2DView())
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
     const Gui::View3DInventorViewer* const inventorViewer = currentView.pView3d->getViewer();
+    if (inventorViewer == nullptr)
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 
-    if (inventorViewer != nullptr) {
+    SoNode* pSceneGraph = inventorViewer->getSceneGraph();
+    if (pSceneGraph == nullptr)
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 
-		SoNode* pSceneGraph = inventorViewer->getSceneGraph();
+    // Prepare the ray-picking object
+    SoRayPickAction rayPickAction(inventorViewer->getSoRenderManager()->getViewportRegion());
+    SbMatrix cameraMatrix;
+    SbVec3f closestHitPoint;
+    float minLength = MAX_FLOAT;
 
-        if (pSceneGraph != nullptr) {
+    // Get the camera rotation
+    getCamera<SoCamera*>()->orientation.getValue().getValue(cameraMatrix);
 
-            SoRayPickAction rayPickAction(inventorViewer->getSoRenderManager()->getViewportRegion());
-            SbMatrix cameraMatrix;
-            SbVec3f closestHitPoint;
-            float minLength = MAX_FLOAT;
+    // Initialize the samples array if it wasn't done before
+    initializePattern();
 
-            getCamera<SoCamera*>()->orientation.getValue().getValue(cameraMatrix);
+    for (uint32_t i = 0; i < hitTestingResolution; i++) {
+        // Scale the sample like it was defined in camera space (placed on XY plane)
+        SbVec3f transform(
+            hitTestPattern[i][0] * ray.radius, hitTestPattern[i][1] * ray.radius, 0.0f);
 
-            for (uint32_t i = 0; i < hitTestingResolution; i++) {
+        // Apply the model-view transform to a sample (only the rotation)
+        cameraMatrix.multVecMatrix(transform, transform);
 
-                SbVec3f transform(
-                    hitTestPattern[i][0] * ray.radius,
-					hitTestPattern[i][1] * ray.radius,
-					0.0f);
+        // Calculate origin of current hit-testing ray
+        SbVec3f newOrigin = ray.origin + transform;
 
-                cameraMatrix.multVecMatrix(transform, transform);
+        // Perform the hit-test
+        rayPickAction.setRay(newOrigin, ray.direction);
+        rayPickAction.apply(pSceneGraph);
+        SoPickedPoint* pickedPoint = rayPickAction.getPickedPoint();
 
-                SbVec3f newOrigin = ray.origin + transform;
+        // Check if there was a hit
+        if (pickedPoint != nullptr) {
+            SbVec3f hitPoint = pickedPoint->getPoint();
+            float distance = (newOrigin - hitPoint).length();
 
-                rayPickAction.setRay(newOrigin, ray.direction);
-                rayPickAction.apply(pSceneGraph);
-                SoPickedPoint* pickedPoint = rayPickAction.getPickedPoint();
-
-                if (pickedPoint != nullptr) {
-                    SbVec3f hitPoint = pickedPoint->getPoint();
-                    float distance = (newOrigin - hitPoint).length();
-
-                    if (distance < minLength) {
-                        minLength = distance;
-                        closestHitPoint = hitPoint;
-                    }
-                }
+            // Save hit of the lowest depth
+            if (distance < minLength) {
+                minLength = distance;
+                closestHitPoint = hitPoint;
             }
-
-            if (minLength < MAX_FLOAT) {
-                std::copy(closestHitPoint.getValue(), closestHitPoint.getValue() + 3, &position.x);
-                return 0;
-            }
-
         }
     }
+
+    if (minLength < MAX_FLOAT) {
+        std::copy(closestHitPoint.getValue(), closestHitPoint.getValue() + 3, &position.x);
+        return 0;
+    }
+
     return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetSelectionExtents(navlib::box_t &extents) const
+long NavlibInterface::GetSelectionExtents(navlib::box_t& extents) const
 {
-	Base::BoundBox3d boundingBox;
-	auto selectionVector = Gui::Selection().getSelection();
+    Base::BoundBox3d boundingBox;
+    auto selectionVector = Gui::Selection().getSelection();
 
-	std::for_each(selectionVector.begin(),
+    std::for_each(selectionVector.begin(),
                   selectionVector.end(),
                   [&boundingBox](Gui::SelectionSingleton::SelObj& selection) {
-
                       Gui::ViewProvider* pViewProvider =
                           Gui::Application::Instance->getViewProvider(selection.pObject);
 
-                      if (pViewProvider == nullptr) {
+                      if (pViewProvider == nullptr)
                           return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-                      }
 
                       boundingBox.Add(pViewProvider->getBoundingBox(selection.SubName, true));
 
-					  return 0l;
+                      return 0l;
                   });
 
-	extents = {boundingBox.MinX,
+    extents = {boundingBox.MinX,
                boundingBox.MinY,
                boundingBox.MinZ,
                boundingBox.MaxX,
                boundingBox.MaxY,
-               boundingBox.MaxZ}; 
+               boundingBox.MaxZ};
 
-	return 0;
+    return 0;
 }
 
 long NavlibInterface::SetHitAperture(double aperture)
 {
-	ray.radius = aperture;
-	return 0;
+    ray.radius = aperture;
+    return 0;
 }
 
-long NavlibInterface::SetHitDirection(const navlib::vector_t &direction)
+long NavlibInterface::SetHitDirection(const navlib::vector_t& direction)
 {
-	ray.direction.setValue(direction.x, direction.y, direction.z);
-	return 0;
+    ray.direction.setValue(direction.x, direction.y, direction.z);
+    return 0;
 }
 
-long NavlibInterface::SetHitLookFrom(const navlib::point_t &eye)
+long NavlibInterface::SetHitLookFrom(const navlib::point_t& eye)
 {
-	ray.origin.setValue(eye.x, eye.y, eye.z);
-	return 0;
+    ray.origin.setValue(eye.x, eye.y, eye.z);
+    return 0;
 }
 
 long NavlibInterface::SetHitSelectionOnly(bool hitSelection)
@@ -200,8 +204,8 @@ long NavlibInterface::SetHitSelectionOnly(bool hitSelection)
 
 void NavlibInterface::initializePivot()
 {
-    pivot.pVisibility = new SoSwitch; 
-	pivot.pTransform = new SoTransform;
+    pivot.pVisibility = new SoSwitch;
+    pivot.pTransform = new SoTransform;
     pivot.pResetTransform = new SoResetTransform;
     pivot.pImage = new SoImage;
     pivot.pDepthTestAlways = new SoDepthBuffer;
@@ -210,11 +214,11 @@ void NavlibInterface::initializePivot()
     pivot.pDepthTestAlways->function.setValue(SoDepthBufferElement::ALWAYS);
     pivot.pDepthTestLess->function.setValue(SoDepthBufferElement::LESS);
 
-	pivot.pivotImage = QImage(QString::fromStdString(":/icons/3dx_pivot.png"));
-    Gui::BitmapFactory().convert(pivot.pivotImage, pivot.pImage->image); 
+    pivot.pivotImage = QImage(QString::fromStdString(":/icons/3dx_pivot.png"));
+    Gui::BitmapFactory().convert(pivot.pivotImage, pivot.pImage->image);
 
-	pivot.pVisibility->ref();
-	pivot.pVisibility->whichChild = SO_SWITCH_NONE;
+    pivot.pVisibility->ref();
+    pivot.pVisibility->whichChild = SO_SWITCH_NONE;
     pivot.pVisibility->addChild(pivot.pDepthTestAlways);
     pivot.pVisibility->addChild(pivot.pTransform);
     pivot.pVisibility->addChild(pivot.pImage);

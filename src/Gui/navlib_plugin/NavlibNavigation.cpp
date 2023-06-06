@@ -1,128 +1,47 @@
 #include <PreCompiled.h>
 #include "NavlibInterface.h"
 
-#include <Inventor/SoRenderManager.h>
-#include <Inventor/SbMatrix.h>
-#include <Inventor/fields/SoSFVec3f.h>
+#include <QMatrix4x4>
+#include <QMdiArea>
+
 #include <Inventor/SbDPMatrix.h>
+#include <Inventor/SbMatrix.h>
 #include <Inventor/SbViewVolume.h>
+#include <Inventor/SoRenderManager.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
-#include <Inventor/nodes/SoPerspectiveCamera.h>
+#include <Inventor/fields/SoSFVec3f.h>
 #include <Inventor/nodes/SoOrthographicCamera.h>
+#include <Inventor/nodes/SoPerspectiveCamera.h>
 
 #include <Gui/Application.h>
 #include <Gui/MDIView.h>
+#include <Gui/MainWindow.h>
 #include <Gui/View3DInventor.h>
 #include <Gui/View3DInventorViewer.h>
-#include <Gui/MainWindow.h>
-#include <Gui/WorkbenchManager.h>
-#include <Gui/Workbench.h>
 #include <Gui/ViewProvider.h>
+#include <Gui/Workbench.h>
+#include <Gui/WorkbenchManager.h>
 
 #include <Base/BoundBox.h>
-#include <QMdiArea>
-#include <QMatrix4x4>
-
-long NavlibInterface::GetPointerPosition(navlib::point_t& position) const
-{
-    if (is2DView()) {
-
-        QPoint point = currentView.pView2d->mapFromGlobal(QCursor::pos());
-        point = currentView.pView2d->mapToScene(point).toPoint();
-        position.x = point.x();
-        position.y = -point.y();
-
-        return 0;
-    }
-
-    if (is3DView()) {
-
-        const Gui::View3DInventorViewer* const inventorViewer = currentView.pView3d->getViewer();
-
-        if (inventorViewer != nullptr) {
-
-            QPoint viewPoint = currentView.pView3d->mapFromGlobal(QCursor::pos());
-            viewPoint.setY(currentView.pView3d->height() - viewPoint.y());
-            SbVec3f worldPosition =
-                inventorViewer->getPointOnFocalPlane(SbVec2s(viewPoint.x(), viewPoint.y()));
-
-            std::copy(worldPosition.getValue(), worldPosition.getValue() + 3, &position.x);
-
-            return 0;
-        }
-    }
-    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-}
-
-template<class CameraType>
-CameraType NavlibInterface::getCamera() const
-{
-    if (is3DView()) {
-
-        const Gui::View3DInventorViewer* inventorViewer = currentView.pView3d->getViewer();
-
-        if (inventorViewer != nullptr) {
-            return dynamic_cast<CameraType>(inventorViewer->getCamera());
-        }
-    }
-    return nullptr;
-}
-
-void NavlibInterface::onViewChanged(const Gui::MDIView* view)
-{
-    if (view != nullptr) {
-
-        auto pView3d = dynamic_cast<const Gui::View3DInventor*>(view);
-
-        if (pView3d != nullptr) {
-            currentView.pView3d = pView3d;
-            currentView.pView2d = nullptr;
-
-            const Gui::View3DInventorViewer* const inventorViewer =
-                currentView.pView3d->getViewer();
-
-            if (inventorViewer != nullptr) {
-
-                auto pGroup = dynamic_cast<SoGroup* const>(inventorViewer->getSceneGraph());
-
-                if (pGroup != nullptr) {
-                    if (pGroup->findChild(pivot.pVisibility) == -1) {
-                        pGroup->addChild(pivot.pVisibility);
-                    }
-                }
-            }
-
-            navlib::box_t extents;
-            navlib::matrix_t camera;
-
-            GetModelExtents(extents);
-            GetCameraMatrix(camera);
-
-            Write(navlib::model_extents_k, extents);
-            Write(navlib::view_affine_k, camera);
-
-            return;
-        }
-        currentView.pView3d = nullptr;
-
-        for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
-
-            QList<QGraphicsView*> views = viewinternal->scene()->views();
-
-            for (QGraphicsView* view : views) {
-                if (view->isActiveWindow()) {
-                    currentView.pView2d = view;
-                    return;
-                }
-            }
-        }
-        currentView.pView2d = nullptr;
-    }
-}
 
 NavlibInterface::NavlibInterface()
-    : CNavigation3D(false, false)
+    : CNavigation3D(false, false),
+      patternInitialized(false),
+      activeTab({-1, ""})
+{}
+
+NavlibInterface::~NavlibInterface()
 {
+    disableNavigation();
+
+    if (pivot.pVisibility != nullptr)
+        pivot.pVisibility->unref();
+}
+
+void NavlibInterface::initializePattern() const
+{
+    if (patternInitialized)
+        return;
 
     if (hitTestingResolution > 0) {
         hitTestPattern[0][0] = 0.0;
@@ -137,33 +56,99 @@ NavlibInterface::NavlibInterface()
         hitTestPattern[i][0] = x;
         hitTestPattern[i][1] = y;
     }
+
+    patternInitialized = true;
+}
+
+long NavlibInterface::GetPointerPosition(navlib::point_t& position) const
+{
+    if (is2DView()) {
+        QPoint point = currentView.pView2d->mapFromGlobal(QCursor::pos());
+        point = currentView.pView2d->mapToScene(point).toPoint();
+        position.x = point.x();
+        position.y = -point.y();
+
+        return 0;
+    }
+
+    if (is3DView()) {
+        const Gui::View3DInventorViewer* const inventorViewer = currentView.pView3d->getViewer();
+        if (inventorViewer == nullptr)
+            return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+        QPoint viewPoint = currentView.pView3d->mapFromGlobal(QCursor::pos());
+        viewPoint.setY(currentView.pView3d->height() - viewPoint.y());
+        SbVec3f worldPosition =
+            inventorViewer->getPointOnFocalPlane(SbVec2s(viewPoint.x(), viewPoint.y()));
+
+        std::copy(worldPosition.getValue(), worldPosition.getValue() + 3, &position.x);
+
+        return 0;
+    }
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+}
+
+template<class CameraType>
+CameraType NavlibInterface::getCamera() const
+{
+    if (is3DView()) {
+        const Gui::View3DInventorViewer* inventorViewer = currentView.pView3d->getViewer();
+        if (inventorViewer != nullptr)
+            return dynamic_cast<CameraType>(inventorViewer->getCamera());
+    }
+    return nullptr;
+}
+
+void NavlibInterface::onViewChanged(const Gui::MDIView* view)
+{
+    if (view == nullptr)
+        return;
+
+    currentView.pView3d = dynamic_cast<const Gui::View3DInventor*>(view);
+    currentView.pView2d = nullptr;
+    if (currentView.pView3d != nullptr) {
+        const Gui::View3DInventorViewer* const inventorViewer = currentView.pView3d->getViewer();
+        if (inventorViewer == nullptr)
+            return;
+
+        auto pGroup = dynamic_cast<SoGroup* const>(inventorViewer->getSceneGraph());
+        if (pGroup == nullptr)
+            return;
+
+        if (pGroup->findChild(pivot.pVisibility) == -1)
+            pGroup->addChild(pivot.pVisibility);
+
+        navlib::box_t extents;
+        navlib::matrix_t camera;
+
+        GetModelExtents(extents);
+        GetCameraMatrix(camera);
+
+        Write(navlib::model_extents_k, extents);
+        Write(navlib::view_affine_k, camera);
+
+        return;
+    }
+
+    for (auto viewinternal : view->findChildren<QGraphicsView*>()) {
+        QList<QGraphicsView*> views = viewinternal->scene()->views();
+        for (QGraphicsView* view : views) {
+            if (view->isActiveWindow()) {
+                currentView.pView2d = view;
+                return;
+            }
+        }
+    }
 }
 
 void NavlibInterface::enableNavigation()
 {
     PutProfileHint("FreeCAD");
-
     CNav3D::EnableNavigation(true, errorCode);
-
-	if (errorCode) {
+    if (errorCode)
         return;
-	}
 
     PutFrameTimingSource(TimingSource::SpaceMouse);
-    Write(navlib::active_k, true);
-
-    auto pQMdiArea = Gui::MainWindow::getInstance()->findChild<QMdiArea*>();
-
-    if (pQMdiArea != nullptr) {
-
-        auto pQTabBar = pQMdiArea->findChild<QTabBar*>();
-
-        if (pQTabBar != nullptr) {
-            pQTabBar->connect(pQTabBar, &QTabBar::currentChanged, [this, pQTabBar](int idx) {
-                activeTab = {idx, idx >= 0 ? pQTabBar->tabText(idx).toStdString() : ""};
-            });
-        }
-    }
 
     Gui::Application::Instance->signalActivateView.connect(
         boost::bind(&NavlibInterface::onViewChanged, this, _1));
@@ -173,6 +158,24 @@ void NavlibInterface::enableNavigation()
     });
 
     initializePivot();
+    connectActiveTab();
+}
+
+void NavlibInterface::connectActiveTab()
+{
+    auto pQMdiArea = Gui::MainWindow::getInstance()->findChild<QMdiArea*>();
+    if (pQMdiArea == nullptr)
+        return;
+
+    auto pQTabBar = pQMdiArea->findChild<QTabBar*>();
+    if (pQTabBar == nullptr)
+        return;
+
+    pQTabBar->connect(pQTabBar, &QTabBar::currentChanged, [this, pQTabBar](int idx) {
+        activeTab = {idx, idx >= 0 ? pQTabBar->tabText(idx).toStdString() : ""};
+    });
+
+    return;
 }
 
 void NavlibInterface::disableNavigation()
@@ -181,64 +184,49 @@ void NavlibInterface::disableNavigation()
     return;
 }
 
-NavlibInterface::~NavlibInterface()
-{
-    disableNavigation();
-
-	if (pivot.pVisibility != nullptr) {
-        pivot.pVisibility->unref();
-	}
-}
-
 long NavlibInterface::GetCameraMatrix(navlib::matrix_t& matrix) const
 {
-    if (activeTab.first == -1 || activeTab.second == "Start page") {
+    if (activeTab.first == -1 || activeTab.second == "Start page")
         return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-    }
-	
-	if (is3DView()) {
 
+    if (is3DView()) {
         auto pCamera = getCamera<SoCamera*>();
+        if (pCamera == nullptr)
+            return navlib::make_result_code(navlib::navlib_errc::function_not_supported);
 
-        if (pCamera != nullptr) {
+        SbMatrix cameraMatrix;
 
-            SbMatrix cameraMatrix;
-            pCamera->orientation.getValue().getValue(cameraMatrix);
+        pCamera->orientation.getValue().getValue(cameraMatrix);
 
-            for (int i = 0; i < 4; i++) {
-                std::copy(cameraMatrix[i], cameraMatrix[i] + 4, &matrix.m00 + 4 * i);
-            }
+        for (int i = 0; i < 4; i++)
+            std::copy(cameraMatrix[i], cameraMatrix[i] + 4, &matrix.m00 + 4 * i);
 
-            const SbVec3f position = pCamera->position.getValue();
-            std::copy(position.getValue(), position.getValue() + 3, &matrix.m30);
+        const SbVec3f position = pCamera->position.getValue();
+        std::copy(position.getValue(), position.getValue() + 3, &matrix.m30);
 
-            return 0;
-        }
+        return 0;
     }
-    
-	if (is2DView()) {
-
+    if (is2DView()) {
         QMatrix4x4 data;
         const QWidget* viewport = currentView.pView2d->viewport();
         const QPointF viewportCenter(viewport->width() / 2.0, viewport->height() / 2.0);
         const QPointF scenePoint = currentView.pView2d->mapToScene(viewportCenter.toPoint());
 
+        // Only XY translations are considered for 2D view. The Z coordinate can be a constant value.
         data(0, 3) = scenePoint.x();
         data(1, 3) = -scenePoint.y();
-        data(2, 3) = 150.0;
+        data(2, 3) = 0.0;
 
         std::copy(data.data(), data.data() + 16, &matrix.m00);
 
         return 0;
     }
-
-	return navlib::make_result_code(navlib::navlib_errc::function_not_supported);
+    return navlib::make_result_code(navlib::navlib_errc::function_not_supported);
 }
 
-long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
+long NavlibInterface::SetCameraMatrix(const navlib::matrix_t& matrix)
 {
     if (is2DView()) {
-
         QMatrix4x4 data;
 
         std::copy(&matrix.m00, &matrix.m33, data.data());
@@ -247,33 +235,31 @@ long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
         return 0;
     }
 
-	auto pCamera = getCamera<SoCamera*>();
+    if (is3DView()) {
+        auto pCamera = getCamera<SoCamera*>();
+        if (pCamera == nullptr)
+            return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 
-	if (pCamera != nullptr) {
-        
-        SbMatrix cameraMatrix(
-			matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(0, 3),
-            matrix(1, 0), matrix(1, 1), matrix(1, 2), matrix(1, 3),
-            matrix(2, 0), matrix(2, 1), matrix(2, 2), matrix(2, 3),
-            matrix(3, 0), matrix(3, 1), matrix(3, 2), matrix(3, 3));
+        SbMatrix cameraMatrix(matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(0, 3),
+                              matrix(1, 0), matrix(1, 1), matrix(1, 2), matrix(1, 3),
+                              matrix(2, 0), matrix(2, 1), matrix(2, 2), matrix(2, 3),
+                              matrix(3, 0), matrix(3, 1), matrix(3, 2), matrix(3, 3));
 
-		pCamera->orientation = SbRotation(cameraMatrix);
+        pCamera->orientation = SbRotation(cameraMatrix);
         pCamera->position.setValue(matrix(3, 0), matrix(3, 1), matrix(3, 2));
-		
-		const Gui::View3DInventorViewer *inventorViewer = currentView.pView3d->getViewer();
 
+        const Gui::View3DInventorViewer* inventorViewer = currentView.pView3d->getViewer();
         SoGetBoundingBoxAction action(inventorViewer->getSoRenderManager()->getViewportRegion());
+
         action.apply(inventorViewer->getSceneGraph());
 
         const SbBox3f boundingBox = action.getBoundingBox();
         SbVec3f modelCenter = boundingBox.getCenter();
         const float modelRadius = (boundingBox.getMin() - modelCenter).length();
 
-		navlib::bool_t isPerspective;
+        navlib::bool_t isPerspective;
         GetIsViewPerspective(isPerspective);
-
-		if (!isPerspective) {
-
+        if (!isPerspective) {
             cameraMatrix.inverse().multVecMatrix(modelCenter, modelCenter);
 
             const float nearDist = -(modelRadius + modelCenter.getValue()[2]);
@@ -286,48 +272,44 @@ long NavlibInterface::SetCameraMatrix(const navlib::matrix_t &matrix)
             else {
                 pCamera->nearDistance.setValue(-farDist);
                 pCamera->farDistance.setValue(farDist);
-            }           
+            }
         }
         pCamera->touch();
-        return 0;
-	}
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
-}
-
-long NavlibInterface::GetViewFrustum(navlib::frustum_t& frustum) const
-{
-    const auto pCamera = getCamera<SoPerspectiveCamera* const>();
-
-    if (pCamera != nullptr) {
-
-        const SbViewVolume viewVolume = pCamera->getViewVolume(pCamera->aspectRatio.getValue());
-        float halfHeight = viewVolume.getHeight() / 2.0f;
-        float halfWidth = viewVolume.getWidth() / 2.0f;
-
-        frustum = {-halfWidth,
-                   halfWidth,
-                   -halfHeight,
-                   halfHeight,
-                   viewVolume.getNearDist(),
-                   10.0f * (viewVolume.getNearDist() + viewVolume.nearToFar)};
-
         return 0;
     }
     return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::SetViewFrustum(const navlib::frustum_t& frustum)
+long NavlibInterface::GetViewFrustum(navlib::frustum_t& frustum) const
 {
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    const auto pCamera = getCamera<SoPerspectiveCamera* const>();
+    if (pCamera == nullptr)
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+    const SbViewVolume viewVolume = pCamera->getViewVolume(pCamera->aspectRatio.getValue());
+    float halfHeight = viewVolume.getHeight() / 2.0f;
+    float halfWidth = viewVolume.getWidth() / 2.0f;
+
+    frustum = {-halfWidth,
+               halfWidth,
+               -halfHeight,
+               halfHeight,
+               viewVolume.getNearDist(),
+               10.0f * (viewVolume.getNearDist() + viewVolume.nearToFar)};
+
+    return 0;
 }
 
+long NavlibInterface::SetViewFrustum(const navlib::frustum_t& frustum)
+{
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+}
 
 long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
 {
     if (is2DView()) {
-
         const QRectF viewRectangle = currentView.pView2d->mapToScene(
-			currentView.pView2d->viewport()->geometry()).boundingRect();
+				currentView.pView2d->viewport()->geometry()).boundingRect();
 
         extents.min.x = viewRectangle.topLeft().x();
         extents.min.y = viewRectangle.topLeft().y();
@@ -339,32 +321,28 @@ long NavlibInterface::GetViewExtents(navlib::box_t& extents) const
         return 0;
     }
 
-	const auto pCamera = getCamera<SoOrthographicCamera *const>();
+    const auto pCamera = getCamera<SoOrthographicCamera* const>();
+    if (pCamera == nullptr)
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 
-	if (pCamera != nullptr) {
+    const SbViewVolume viewVolume = pCamera->getViewVolume(pCamera->aspectRatio.getValue());
+    const float halfHeight = viewVolume.getHeight() / 2.0f;
+    const float halfWidth = viewVolume.getWidth() / 2.0f;
+    const float farDistance = viewVolume.nearToFar + viewVolume.nearDist;
 
-        const SbViewVolume viewVolume = pCamera->getViewVolume(pCamera->aspectRatio.getValue());
-        const float halfHeight = viewVolume.getHeight() / 2.0f;
-        const float halfWidth = viewVolume.getWidth() / 2.0f;
-        const float farDistance = viewVolume.nearToFar + viewVolume.nearDist;
+    extents = {-halfWidth, -halfHeight, -farDistance, halfWidth, halfHeight, farDistance};
 
-        extents = {-halfWidth, -halfHeight, -farDistance, halfWidth, halfHeight, farDistance};
-
-        return 0;
-    }
-	
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return 0;
 }
 
-long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
+long NavlibInterface::SetViewExtents(const navlib::box_t& extents)
 {
-	if(is2DView()) { 
-		
-		const QRectF viewRectangle = currentView.pView2d->mapToScene(
-			currentView.pView2d->viewport()->geometry()).boundingRect();
+    if (is2DView()) {
+        const QRectF viewRectangle = currentView.pView2d->mapToScene(
+				currentView.pView2d->viewport()->geometry()).boundingRect();
 
         const float scaling = viewRectangle.height() / (extents.max.y - extents.min.y);
-		QTransform transform = currentView.pView2d->transform();
+        QTransform transform = currentView.pView2d->transform();
 
         transform.setMatrix(transform.m11() * scaling,
                             transform.m12(),
@@ -376,85 +354,76 @@ long NavlibInterface::SetViewExtents(const navlib::box_t &extents)
                             transform.m32(),
                             transform.m33());
 
-		currentView.pView2d->setTransform(transform);
+        currentView.pView2d->setTransform(transform);
 
-		return 0;
-	}
-	
-	if (is3DView()) {
-
-        auto pCamera = getCamera<SoOrthographicCamera* const>();
-
-        if (pCamera != nullptr) {
-
-            navlib::box_t oldExtents;
-            GetViewExtents(oldExtents);
-
-            pCamera->scaleHeight(extents.max.x / oldExtents.max.x);
-
-            return 0;
-        }
+        return 0;
     }
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+    if (is3DView()) {
+        auto pCamera = getCamera<SoOrthographicCamera* const>();
+        if (pCamera == nullptr)
+            return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+        navlib::box_t oldExtents;
+        GetViewExtents(oldExtents);
+
+        pCamera->scaleHeight(extents.max.x / oldExtents.max.x);
+
+        return 0;
+    }
+
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetViewFOV(double &fov) const
+long NavlibInterface::GetViewFOV(double& fov) const
 {
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
 long NavlibInterface::SetViewFOV(double fov)
 {
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetIsViewPerspective(navlib::bool_t &perspective) const
+long NavlibInterface::GetIsViewPerspective(navlib::bool_t& perspective) const
 {
-    auto pPerspectiveCamera = getCamera<SoPerspectiveCamera *const>();
-
-	if (pPerspectiveCamera != nullptr) {
+    auto pPerspectiveCamera = getCamera<SoPerspectiveCamera* const>();
+    if (pPerspectiveCamera != nullptr) {
         perspective = true;
         return 0;
     }
 
-	auto pOrthographicCamera = getCamera<SoOrthographicCamera *const>();
-
-	if (pOrthographicCamera != nullptr || is2DView()) {
+    auto pOrthographicCamera = getCamera<SoOrthographicCamera* const>();
+    if (pOrthographicCamera != nullptr || is2DView()) {
         perspective = false;
         return 0;
     }
-	
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetModelExtents(navlib::box_t &extents) const
+long NavlibInterface::GetModelExtents(navlib::box_t& extents) const
 {
     if (is3DView()) {
-
         const Gui::View3DInventorViewer* const inventorViewer = currentView.pView3d->getViewer();
+        if (inventorViewer == nullptr)
+            return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 
-        if (inventorViewer != nullptr) {
+        SoGetBoundingBoxAction action(inventorViewer->getSoRenderManager()->getViewportRegion());
 
-            SoGetBoundingBoxAction action(
-                inventorViewer->getSoRenderManager()->getViewportRegion());
+        action.apply(inventorViewer->getSceneGraph());
+        const SbBox3f boundingBox = action.getBoundingBox();
 
-            action.apply(inventorViewer->getSceneGraph());
-            const SbBox3f boundingBox = action.getBoundingBox();
+        std::copy(
+            boundingBox.getMin().getValue(), boundingBox.getMin().getValue() + 3, &extents.min.x);
 
-            std::copy(boundingBox.getMin().getValue(),
-                      boundingBox.getMin().getValue() + 3,
-                      &extents.min.x);
+        std::copy(
+            boundingBox.getMax().getValue(), boundingBox.getMax().getValue() + 3, &extents.max.x);
 
-            std::copy(boundingBox.getMax().getValue(),
-                      boundingBox.getMax().getValue() + 3,
-                      &extents.max.x);
-
-            return 0;
-        }
+        return 0;
     }
-	
-	if (is2DView()) {
 
+    if (is2DView()) {
         const QRectF sceneExtents = currentView.pView2d->scene()->itemsBoundingRect();
 
         extents.min.x = sceneExtents.topLeft().x();
@@ -466,8 +435,7 @@ long NavlibInterface::GetModelExtents(navlib::box_t &extents) const
 
         return 0;
     }
-
-	return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+    return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
 long NavlibInterface::SetTransaction(long value)
@@ -475,37 +443,36 @@ long NavlibInterface::SetTransaction(long value)
     return navlib::make_result_code(navlib::navlib_errc::no_data_available);
 }
 
-long NavlibInterface::GetFrontView(navlib::matrix_t &matrix) const
+long NavlibInterface::GetFrontView(navlib::matrix_t& matrix) const
 {
-	matrix = {  1., 0., 0., 0.,
-				0., 0., 1., 0.,
-				0., -1., 0., 0.,
-				0., 0., 0., 1. };
-
-	return 0;
+    matrix = {1., 0., 0., 0.,
+              0., 0., 1., 0.,
+              0., -1., 0., 0.,
+              0., 0., 0., 1.};
+    return 0;
 }
 
-long NavlibInterface::GetCoordinateSystem(navlib::matrix_t &matrix) const
+long NavlibInterface::GetCoordinateSystem(navlib::matrix_t& matrix) const
 {
-	matrix = {  1., 0., 0., 0.,
-				0., 0., -1., 0.,
-				0., 1., 0., 0.,
-				0., 0., 0., 1. };
-	return 0;
+    matrix = {1., 0., 0., 0.,
+              0., 0., -1., 0.,
+              0., 1., 0., 0.,
+              0., 0., 0., 1.};
+    return 0;
 }
 
 long NavlibInterface::GetIsViewRotatable(navlib::bool_t& isRotatable) const
 {
-	isRotatable = is3DView();
-	return 0;
+    isRotatable = is3DView();
+    return 0;
 }
 
 bool NavlibInterface::is3DView() const
 {
-	return currentView.pView3d != nullptr;
+    return currentView.pView3d != nullptr;
 }
 
 bool NavlibInterface::is2DView() const
 {
-	return currentView.pView2d != nullptr;
+    return currentView.pView2d != nullptr;
 }
