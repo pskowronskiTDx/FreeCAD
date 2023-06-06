@@ -10,15 +10,12 @@
  * code.
  *
  *
- * Copyright (c) 2017-2021 3Dconnexion. All rights reserved.
+ * Copyright (c) 2017-2023 3Dconnexion. All rights reserved.
  * Permission to use, copy, modify, and distribute this software for all
  * purposes and without fees is hereby granted provided that this copyright
  * notice appears in all copies.  Permission to modify this software is granted and
  * 3Dconnexion will support such modifications if and only if said modifications
  * are approved by 3Dconnexion.
- *
- * History
- * $Id: navlib_stub.c 18269 2021-03-25 11:43:47Z mbonk $
  *
  */
 
@@ -45,7 +42,7 @@
 
 /* DLL library name */
 #ifdef _WIN32
-static const wchar_t *TheLibrary = L"TDxNavLib";
+static const char *TheLibrary = "TDxNavLib";
 #elif __APPLE__
 static const char *TheLibrary = "/Library/Frameworks/3DconnexionNavlib.framework/3DconnexionNavlib";
 #endif
@@ -72,13 +69,13 @@ static PFN_NLREADVALUE pfnNlReadValue = NULL;
 static PFN_NLWRITEVALUE pfnNlWriteValue = NULL;
 static PFN_NLGETTYPE pfnNlGetType = NULL;
 
-extern long NlErrorCode;
+extern const long NlErrorCode;
 
 #if _WIN32
 
 long NlLoadLibrary() {
   long error = 0;
-  HMODULE h = LoadLibrary(TheLibrary);
+  HMODULE h = LoadLibraryA(TheLibrary);
   if (!h) {
     error = HRESULT_FROM_WIN32(GetLastError());
   }

@@ -20,43 +20,33 @@
 #include <Gui/Workbench.h>
 #include <Gui/WorkbenchManager.h>
 
-constexpr uint8_t LCD_ICON_WIDTH = 24u;
+constexpr uint8_t LCD_ICON_SIZE = 24u;
 
 NavlibInterface::ParsedData NavlibInterface::parseCommandId(const std::string& commandId) const
 {
-    ParsedData result {"", "", 0};
+    ParsedData result{"", "", 0};
 
     if (commandId.empty())
         return result;
 
     auto groupDelimiter = std::find(commandId.cbegin(), commandId.cend(), '|');
-    if (groupDelimiter >= --commandId.cend())
+    if (groupDelimiter == commandId.cend())
         return result;
 
-    std::string groupName(commandId.cbegin(), groupDelimiter);
+    result.groupName = std::string(commandId.cbegin(), groupDelimiter);
     groupDelimiter++;
 
     auto commandDelimiter = std::find(groupDelimiter, commandId.cend(), '|');
-    if (commandDelimiter == --commandId.cend())
-        return result;
 
-    std::string commandName(groupDelimiter, commandDelimiter);
-    int32_t actionIndex = -1;
+    result.commandName = std::string(groupDelimiter, commandDelimiter);
+    result.actionIndex = -1;
 
     if (commandDelimiter != commandId.cend()) {
-        QString indexStr =
+        QString indexString =
             QString::fromStdString(std::string(++commandDelimiter, commandId.cend()).c_str());
 
-        bool conversionOk = false;
-        actionIndex = indexStr.toInt(&conversionOk);
-
-        if (!conversionOk)
-            return result;
+        result.actionIndex = indexString.toInt();
     }
-
-    result.groupName = groupName;
-    result.commandName = commandName;
-    result.actionIndex = actionIndex;
 
     return result;
 }
@@ -81,12 +71,12 @@ std::string NavlibInterface::getId(const Gui::Command& command, const int32_t pa
 TDx::CImage NavlibInterface::getImage(const QAction& qaction, const std::string& id) const
 {
     const QIcon iconImg = qaction.icon();
-    const QImage qimage = iconImg.pixmap(QSize(LCD_ICON_WIDTH, LCD_ICON_WIDTH)).toImage();
+    const QImage qimage = iconImg.pixmap(QSize(LCD_ICON_SIZE, LCD_ICON_SIZE)).toImage();
     QByteArray qbyteArray;
     QBuffer qbuffer(&qbyteArray);
     qimage.save(&qbuffer, "PNG");
 
-    return TDx::CImage::FromData(qbyteArray.toStdString(), 0, id.c_str());
+    return TDxImage::FromData(qbyteArray.toStdString(), 0, id.c_str());
 }
 
 void NavlibInterface::removeMarkups(std::string& text) const
@@ -96,14 +86,9 @@ void NavlibInterface::removeMarkups(std::string& text) const
         if (markupBegin == text.cend())
             return;
 
-        auto markupEnd = std::find(textBegin, text.cend(), '>');
+        auto markupEnd = std::find(markupBegin, text.cend(), '>');
         if (markupEnd == text.cend())
             return;
-
-        if (markupBegin > markupEnd) {
-            textBegin = markupBegin;
-            continue;
-        }
 
         if (*std::prev(markupEnd) == 'p')
             text.insert(std::next(markupEnd), 2, '\n');
@@ -190,7 +175,7 @@ void NavlibInterface::unpackCommands(Gui::Command& command,
             continue;
 
         if (!pQAction->icon().isNull()) {
-            TDx::CImage commandImage = getImage(*pQAction, ccommand.GetId());
+            TDxImage commandImage = getImage(*pQAction, ccommand.GetId());
             images.push_back(commandImage);
         }
 
@@ -212,6 +197,13 @@ void NavlibInterface::exportCommands(const std::string& workbench)
     if (errorCode || (workbench.compare(noneWorkbenchStr) == 0))
         return;
 
+    auto exportedSetItr =
+        std::find(exportedCommandSets.cbegin(), exportedCommandSets.cend(), workbench);
+    if (exportedSetItr != exportedCommandSets.cend()) {
+        PutActiveCommands(workbench);
+        return;
+    }
+
     std::string shortName(workbench);
     size_t index = shortName.find(workbenchStr);
 
@@ -220,7 +212,7 @@ void NavlibInterface::exportCommands(const std::string& workbench)
 
     auto guiCommands = Gui::Application::Instance->commandManager().getAllCommands();
 
-    std::vector<TDx::CImage> images;
+    std::vector<TDxImage> images;
     std::unordered_map<std::string, TDxCategory> categories;
 
     for (Gui::Command* command : guiCommands) {
@@ -244,4 +236,5 @@ void NavlibInterface::exportCommands(const std::string& workbench)
     CNav3D::AddCommandSet(commandsSet);
     CNav3D::PutActiveCommands(workbench);
     CNav3D::AddImages(images);
+    exportedCommandSets.push_back(workbench);
 }

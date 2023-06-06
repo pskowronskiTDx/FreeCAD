@@ -285,7 +285,7 @@ SET(FreeCADGui_SDK_MOC_HDRS
 )
 endif(FREECAD_USE_3DCONNEXION AND APPLE)
 
-if(TDxWare_SDK_FOUND AND (MSVC OR APPLE)) 
+if(TDxWare_SDK_FOUND AND (MSVC OR APPLE))
     SET(FreeCADGui_SDK_SRCS
         navlib_plugin/NavlibCmds.cpp
         navlib_plugin/NavlibNavigation.cpp

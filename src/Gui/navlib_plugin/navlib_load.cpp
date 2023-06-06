@@ -6,7 +6,7 @@
 * The module loads the navlib dynamic link library at startup.
 *
 *
-* Copyright (c) 2017-2021 3Dconnexion. All rights reserved.
+* Copyright (c) 2017-2023 3Dconnexion. All rights reserved.
 * Permission to use, copy, modify, and distribute this software for all
 * purposes and without fees is hereby granted provided that this copyright
 * notice appears in all copies.  Permission to modify this software is granted
@@ -16,5 +16,5 @@
 */
 extern "C" {
   extern long NlLoadLibrary();
-  long NlErrorCode = NlLoadLibrary();
+  extern const long NlErrorCode = NlLoadLibrary();
 }
