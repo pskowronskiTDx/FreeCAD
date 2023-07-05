@@ -446,16 +446,6 @@ MainWindow::MainWindow(QWidget * parent, Qt::WindowFlags f)
     // accept drops on the window, get handled in dropEvent, dragEnterEvent
     setAcceptDrops(true);
 
-    // setup font substitutions for NaviCube
-    // Helvetica usually gives good enough results on mac & linux
-    // in rare cases Helvetica matches a bad font on linux
-    // Nimbus Sans Narrow and Open Sans Condensed added as fallback
-    // Bahnschrift is a condensed font available on windows versions since 2017
-    // Arial added as fallback for older version
-    auto substitutions = QStringLiteral("Bahnschrift,Helvetica,Nimbus Sans Narrow,Open Sans Condensed,Arial,Sans");
-    auto family = QStringLiteral("FreeCAD NaviCube");
-    QFont::insertSubstitutions(family, substitutions.split(QLatin1Char(',')));
-
     statusBar()->showMessage(tr("Ready"), 2001);
 }
 
@@ -2252,9 +2242,16 @@ void StatusBarObserver::OnChange(Base::Subject<const char*> &rCaller, const char
     }
 }
 
-void StatusBarObserver::SendLog(const std::string& notifiername, const std::string& msg, Base::LogStyle level)
+void StatusBarObserver::SendLog(const std::string& notifiername, const std::string& msg, Base::LogStyle level,
+                                Base::IntendedRecipient recipient, Base::ContentType content)
 {
     (void) notifiername;
+
+    // Do not log untranslated messages, or messages intended only to a developer to status bar
+    if( recipient == Base::IntendedRecipient::Developer ||
+        content == Base::ContentType::Untranslated ||
+        content == Base::ContentType::Untranslatable )
+        return;
 
     int messageType = -1;
     switch(level){
