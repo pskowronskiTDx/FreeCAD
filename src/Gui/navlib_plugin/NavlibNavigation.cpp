@@ -289,7 +289,7 @@ long NavlibInterface::GetViewFrustum(navlib::frustum_t& frustum) const
     const SbViewVolume viewVolume = pCamera->getViewVolume(pCamera->aspectRatio.getValue());
     float halfHeight = viewVolume.getHeight() / 2.0f;
     float halfWidth = viewVolume.getWidth() / 2.0f;
-
+  
     frustum = {-halfWidth,
                halfWidth,
                -halfHeight,
@@ -464,6 +464,12 @@ long NavlibInterface::GetCoordinateSystem(navlib::matrix_t& matrix) const
 long NavlibInterface::GetIsViewRotatable(navlib::bool_t& isRotatable) const
 {
     isRotatable = is3DView();
+    return 0;
+}
+
+long NavlibInterface::GetUnitsToMeters(double &units) const
+{
+    units = 0.001;
     return 0;
 }
 

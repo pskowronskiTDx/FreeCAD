@@ -63,6 +63,7 @@ private:
     long GetFrontView(navlib::matrix_t&) const override;
     long GetCoordinateSystem(navlib::matrix_t&) const override;
     long GetIsViewRotatable(navlib::bool_t&) const override;
+    long GetUnitsToMeters(double&) const override;
 
     long SetCameraMatrix(const navlib::matrix_t&) override;
     long SetViewExtents(const navlib::box_t&) override;
