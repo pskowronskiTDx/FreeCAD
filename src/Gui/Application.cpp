@@ -124,7 +124,7 @@
 #include "WorkbenchManager.h"
 #include "WidgetFactory.h"
 
-#include "navlib_plugin/NavlibInterface.h"
+#include "3Dconnexion/navlib/NavlibInterface.h"
 
 using namespace Gui;
 using namespace Gui::DockWnd;
