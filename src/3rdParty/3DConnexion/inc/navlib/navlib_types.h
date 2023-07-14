@@ -13,7 +13,7 @@
 // *************************************************************************************************
 // File History
 //
-// $Id: navlib_types.h 19945 2023-01-26 07:48:01Z mbonk $
+// $Id: navlib_types.h 20296 2023-07-12 06:07:32Z mbonk $
 //
 // 01/23/14 MSB Initial design
 // </history>
@@ -1885,7 +1885,11 @@ typedef enum nlOptions {
   /// <remarks>
   /// The default is column major order.
   /// </remarks>
-  row_major_order = 2
+  row_major_order = 2,
+  /// <summary>
+  /// disable any popup notifications.
+  /// </summary>
+  no_ui = 4,
 } nlOptions_t;
 
 /// <summary>

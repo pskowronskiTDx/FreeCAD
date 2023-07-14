@@ -47,7 +47,7 @@
 #include <Base/BoundBox.h>
 
 NavlibInterface::NavlibInterface()
-    : CNavigation3D(false, false),
+    : CNavigation3D(false, navlib::nlOptions_t::no_ui),
       patternInitialized(false),
       activeTab({-1, ""})
 {}
