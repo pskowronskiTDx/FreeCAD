@@ -25,6 +25,7 @@
 
 #include <QMatrix4x4>
 #include <QMdiArea>
+#include <QTabBar>
 
 #include <Inventor/SbDPMatrix.h>
 #include <Inventor/SbMatrix.h>
@@ -173,7 +174,7 @@ void NavlibInterface::enableNavigation()
     PutFrameTimingSource(TimingSource::SpaceMouse);
 
     Gui::Application::Instance->signalActivateView.connect(
-        boost::bind(&NavlibInterface::onViewChanged, this, _1));
+        boost::bind(&NavlibInterface::onViewChanged, this, boost::placeholders::_1));
 
     Gui::Application::Instance->signalActivateWorkbench.connect([this](const char* wb) {
         exportCommands(std::string(wb));

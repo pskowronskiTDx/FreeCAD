@@ -23,8 +23,9 @@
 #include <PreCompiled.h>
 #include "NavlibInterface.h"
 
-#include <QScrollBar >
+#include <QScrollBar>
 #include <QString>
+#include <QBuffer>
 
 #include <algorithm>
 #include <iterator>

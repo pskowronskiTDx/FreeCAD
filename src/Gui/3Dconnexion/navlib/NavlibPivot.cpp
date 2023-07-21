@@ -129,7 +129,12 @@ long NavlibInterface::GetHitLookAt(navlib::point_t& position) const
     float minLength = MAX_FLOAT;
 
     // Get the camera rotation
-    getCamera<SoCamera*>()->orientation.getValue().getValue(cameraMatrix);
+    SoCamera* pCamera = getCamera<SoCamera*>();
+    
+    if (pCamera == nullptr)
+        return navlib::make_result_code(navlib::navlib_errc::no_data_available);
+
+    pCamera->orientation.getValue().getValue(cameraMatrix);
 
     // Initialize the samples array if it wasn't done before
     initializePattern();
